@@ -26,7 +26,7 @@ require (
 	k8s.io/client-go v0.33.3
 	k8s.io/component-base v0.33.3
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
+	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/scheduler-plugins v0.32.7
 	sigs.k8s.io/yaml v1.6.0

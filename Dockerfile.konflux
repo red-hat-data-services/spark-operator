@@ -66,5 +66,6 @@ LABEL com.redhat.component="odh-spark-operator" \
       maintainer="['managed-open-data-hub@redhat.com']" \
       io.openshift.expose-services="" \
       io.k8s.display-name="odh-spark-operator" \
+      distribution-scope="public" \
       io.k8s.description="odh-spark-operator" \
       com.redhat.license_terms="https://www.redhat.com/licenses/Red_Hat_Standard_EULA_20191108.pdf"

@@ -25,7 +25,7 @@ runs:
     # Step 2: Install kubectl
     # ======================================================================
     - name: Install kubectl
-      uses: azure/setup-kubectl@v3
+      uses: azure/setup-kubectl@v5
       with:
         version: 'v1.32.0'
 

@@ -32,21 +32,21 @@ spec:
     value: "true"
   - name: build-platforms
     value:
-      - linux/amd64
+      - linux/x86_64
       - linux/arm64
       - linux/ppc64le
       - linux/s390x
   - name: prefetch-input
     value: gomod
   pipelineRef:
-    resolver: bundles
+    resolver: git
     params:
-    - name: name
-      value: docker-build-multi-platform-oci-ta
-    - name: bundle
-      value: quay.io/konflux-ci/tekton-catalog/pipeline-docker-build-multi-platform-oci-ta:0.1@sha256:26c4b5f953737e66136d312811658c745060be8284eae210ddfd188fbf7de3de
-    - name: kind
-      value: pipeline
+    - name: url
+      value: https://github.com/opendatahub-io/odh-konflux-central.git
+    - name: revision
+      value: main
+    - name: pathInRepo
+      value: pipeline/multi-arch-operator-build.yaml
   taskRunTemplate:
     serviceAccountName: build-pipeline-spark-operator-ci
   workspaces:

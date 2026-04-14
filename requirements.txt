@@ -9,6 +9,6 @@
 py4j==0.10.9.9 \
     --hash=sha256:9d28ccc833a9a99abee95569452f7782cec39cd1d57e872577e8216aa1abbc48
     # via pyspark
-pyspark==4.0.1 \
-    --hash=sha256:8bf840d087f100df7910b3f44d5b83899b5b63812274856d7c83c2d13ebac62a
+pyspark==4.1.1 \
+    --hash=sha256:77f78984aa84fbe865c717dd37b49913b4e5c97d76ef6824f932f1aefa6621ec
     # via -r requirements.in

@@ -50,7 +50,10 @@ spec:
         },
         {
           "type": "pip",
-          "path": "."
+          "path": ".",
+          "options": {
+            "index-url": "https://console.redhat.com/api/pypi/public-rhai/rhoai/3.4/cpu-ubi9/simple/"
+          }
         },
         {
           "type": "rpm",
@@ -72,6 +75,9 @@ spec:
   - name: build-platforms
     value:
     - linux/x86_64
+    - linux/arm64
+    - linux/ppc64le
+    - linux/s390x
   pipelineRef:
     resolver: git
     params:

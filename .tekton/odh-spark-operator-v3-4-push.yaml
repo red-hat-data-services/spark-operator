@@ -50,10 +50,7 @@ spec:
         },
         {
           "type": "pip",
-          "path": ".",
-          "options": {
-            "index-url": "https://console.redhat.com/api/pypi/public-rhai/rhoai/3.4/cpu-ubi9/simple/"
-          }
+          "path": "."
         },
         {
           "type": "rpm",

@@ -35,6 +35,13 @@ ARG PYSPARK_VERSION=4.0.1
 
 USER 0
 
+# Import RPM GPG keys needed for UBI and EPEL packages.
+# Prefer prefetched EPEL key, then fall back to direct key import.
+RUN . /cachi2/cachi2.env && \
+    rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release && \
+    (rpm --import /cachi2/output/deps/generic/RPM-GPG-KEY-EPEL-9 || \
+     rpm --import https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9)
+
 # Create spark user/group with SPARK_UID if needed
 RUN if getent group "${SPARK_UID}" > /dev/null 2>&1; then \
         EXISTING_GROUP=$(getent group "${SPARK_UID}" | cut -d: -f1); \

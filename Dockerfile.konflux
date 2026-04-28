@@ -70,8 +70,9 @@ ENV JAVA_HOME="/usr/lib/jvm/java-17" \
     JAVA_VERSION="17"
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
-# Install PySpark and stage Spark layout
-RUN pip3 install --no-cache-dir pyspark==${PYSPARK_VERSION}
+# Install PySpark from prefetched pip cache and stage Spark layout
+RUN . /cachi2/cachi2.env && \
+    pip3 install --no-cache-dir --no-index --find-links /cachi2/output/deps/pip pyspark==${PYSPARK_VERSION}
 ENV SPARK_HOME=/opt/spark
 RUN PYSPARK_DIR=$(python3 -c "import pyspark; import os; print(os.path.dirname(pyspark.__file__))") && \
     cp -r "${PYSPARK_DIR}" /opt/spark && \

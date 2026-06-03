@@ -7,15 +7,6 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    build.appstudio.openshift.io/build-nudge-files: "build/operator-nudging.yaml"
-    pipelinesascode.tekton.dev/on-cel-expression: |
-      event == "pull_request"
-      && target_branch == "rhoai-3.4"
-      && (
-        files.all.exists(p, !p.matches('^\\.tekton/'))
-        || ".tekton/odh-spark-operator-v3-4-pull-request.yaml".pathChanged()
-        || "Dockerfile.konflux".pathChanged()
-      )
   labels:
     appstudio.openshift.io/application: rhoai-v3-4
     appstudio.openshift.io/component: odh-spark-operator-v3-4
@@ -28,11 +19,8 @@ spec:
     value: '{{source_url}}'
   - name: revision
     value: '{{revision}}'
-  - name: additional-tags
-    value:
-    - '{{target_branch}}-{{revision}}'
   - name: output-image
-    value: quay.io/rhoai/odh-spark-operator-rhel9:{{target_branch}}
+    value: quay.io/rhoai/pull-request-pipelines:odh-spark-operator-v3-4-{{revision}}
   - name: rhoai-version
     value: "3.4.1"
   - name: dockerfile

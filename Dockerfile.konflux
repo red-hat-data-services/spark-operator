@@ -36,6 +36,10 @@ ARG PYSPARK_VERSION=4.0.1
 
 USER 0
 
+COPY RPM-GPG-KEY-EPEL-9 /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9
+RUN rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release && \
+    rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9
+
 # Create spark user/group with SPARK_UID if needed
 RUN if getent group "${SPARK_UID}" > /dev/null 2>&1; then \
         EXISTING_GROUP=$(getent group "${SPARK_UID}" | cut -d: -f1); \

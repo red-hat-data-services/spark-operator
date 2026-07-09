@@ -95,7 +95,7 @@ fi
 if [ "$UPLOAD_ASSETS" = true ]; then
     log "Uploading test PDFs..."
     cd "$REPO_ROOT/examples/openshift"
-    ./k8s/deploy.sh upload ./tests/assets/
+    ./k8s/deploy.sh upload ./assets/
     pass "Test assets uploaded"
 fi
 

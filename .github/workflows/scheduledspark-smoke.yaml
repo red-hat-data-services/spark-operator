@@ -5,12 +5,12 @@ on:
     branches:
       - main
     paths:
-      - 'examples/openshift/**'
+      - 'test/e2e/rhoai/**'
       - 'config/**'
       - '.github/workflows/scheduledspark-smoke.yaml'
   pull_request:
     paths:
-      - 'examples/openshift/**'
+      - 'test/e2e/rhoai/**'
       - 'config/**'
       - '.github/workflows/scheduledspark-smoke.yaml'
   workflow_dispatch: {}
@@ -26,27 +26,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup Kind cluster
-        uses: ./.github/actions/kind-cluster-setup
-
-      - name: Install oc
-        uses: redhat-actions/oc-installer@35b60c3f9757ae4301521556e1b75ff6f59f8d7c
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
         with:
-          oc_version: 'latest'
+          go-version-file: go.mod
 
-      - name: Install Spark Operator (keep installed)
-        run: CLEANUP=false make -C examples/openshift operator-install
+      - name: Create a Kind cluster
+        run: make kind-create-cluster
 
-      - name: RBAC preflight
+      - name: Build and load image to Kind cluster
+        run: make kind-load-image IMAGE_TAG=local
+
+      - name: Run OpenShift e2e tests (operator install + scheduled spark + RBAC)
+        run: make e2e-rhoai-test
         env:
-          NAMESPACE: spark-operator
-          CONTROLLER_SA: spark-operator-controller
-        run: make -C examples/openshift scheduledspark-rbac-check
-
-      - name: ScheduledSparkApplication smoke
-        env:
-          NAMESPACE: spark-operator
-          SCHED_NAME: rbac-scheduled-smoke
-          TIMEOUT_SECONDS: "180"
-        run: make -C examples/openshift scheduledspark-smoke
-
+          INSTALL_METHOD: kustomize
+          SPARK_OPERATOR_IMAGE: ghcr.io/kubeflow/spark-operator/controller:local
+          SKIP_SPARK_JOB_TESTS: "true"

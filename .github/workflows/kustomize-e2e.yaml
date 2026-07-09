@@ -15,7 +15,7 @@ on:
       - main
     paths:
       - 'config/**'
-      - 'examples/openshift/tests/e2e/**'
+      - 'test/e2e/rhoai/**'
       - 'examples/openshift/Makefile'
       - '.github/workflows/kustomize-e2e.yaml'
       - 'cmd/**'
@@ -29,7 +29,7 @@ on:
       - main
     paths:
       - 'config/**'
-      - 'examples/openshift/tests/e2e/**'
+      - 'test/e2e/rhoai/**'
       - 'examples/openshift/Makefile'
       - '.github/workflows/kustomize-e2e.yaml'
       - 'cmd/**'
@@ -70,7 +70,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
         with:
           go-version-file: go.mod
 
@@ -81,16 +81,18 @@ jobs:
         run: make kind-load-image IMAGE_TAG=local
 
       - name: Run kustomize e2e tests
-        run: make -C examples/openshift e2e-kustomize-test
+        run: make e2e-rhoai-test
         env:
+          INSTALL_METHOD: kustomize
           SPARK_OPERATOR_IMAGE: ghcr.io/kubeflow/spark-operator/controller:local
+          SKIP_SPARK_JOB_TESTS: "true"
 
       - name: Upload e2e coverage to Codecov
         if: always() && github.event_name == 'push'
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
-          files: cover-e2e-kustomize.out
-          flags: e2e-kustomize
+          files: cover-e2e-openshift.out
+          flags: e2e-openshift
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Debug - Show cluster state

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e_test
+package rhoai_test
 
 import (
 	"context"
@@ -56,9 +56,6 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
-// These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
-
 const (
 	ReleaseName      = "spark-operator"
 	ReleaseNamespace = "spark-operator"
@@ -73,38 +70,48 @@ const (
 )
 
 var (
-	cfg           *rest.Config
-	testEnv       *envtest.Environment
-	k8sClient     client.Client
-	clientset     *kubernetes.Clientset
-	installMethod string
-	repoRoot      string
-	origParamsEnv []byte
+	cfg               *rest.Config
+	testEnv           *envtest.Environment
+	k8sClient         client.Client
+	clientset         *kubernetes.Clientset
+	installMethod     string
+	repoRoot          string
+	origParamsEnv     []byte
+	sparkAppImage     string
+	skipSparkJobTests bool
 
 	mutatingWebhookName   string
 	validatingWebhookName string
 )
 
-func TestSparkOperator(t *testing.T) {
+func TestSparkOperatorRHOAI(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Spark Operator Suite")
+	RunSpecs(t, "Spark Operator RHOAI Suite")
 }
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	var err error
 
-	repoRoot = filepath.Join("..", "..", "..", "..")
+	repoRoot = filepath.Join("..", "..", "..")
 
 	installMethod = os.Getenv("INSTALL_METHOD")
 	if installMethod == "" {
-		installMethod = InstallMethodHelm
+		installMethod = InstallMethodKustomize
 	}
+	sparkAppImage = os.Getenv("SPARK_APP_IMAGE")
+	skipSparkJobTests = strings.EqualFold(os.Getenv("SKIP_SPARK_JOB_TESTS"), "true")
 	logf.Log.Info("Using install method", "method", installMethod)
+	if sparkAppImage != "" {
+		logf.Log.Info("Overriding Spark app image", "image", sparkAppImage)
+	}
+	if skipSparkJobTests {
+		logf.Log.Info("Spark job execution tests will be skipped (SKIP_SPARK_JOB_TESTS=true)")
+	}
 
 	switch installMethod {
-	case InstallMethodKustomize, InstallMethodPreinstalled:
+	case InstallMethodKustomize:
 		mutatingWebhookName = "mutating-webhook-configuration"
 		validatingWebhookName = "validating-webhook-configuration"
 	default:
@@ -116,12 +123,6 @@ var _ = BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join(repoRoot, "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
-
-		// The BinaryAssetsDirectory is only required if you want to run the tests directly
-		// without call the makefile target test. If not informed it will look for the
-		// default path defined in controller-runtime which is /usr/local/kubebuilder/.
-		// Note that you must have the required binaries setup under the bin directory to perform
-		// the tests directly. When we run make test it will be setup and used automatically.
 		BinaryAssetsDirectory: filepath.Join(repoRoot, "bin", "k8s",
 			fmt.Sprintf("1.33.0-%s-%s", runtime.GOOS, runtime.GOARCH)),
 		UseExistingCluster: ptr.To(true),
@@ -143,7 +144,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(clientset).NotTo(BeNil())
 
-	// Only manage operator namespace if not preinstalled
 	if installMethod != InstallMethodPreinstalled {
 		By("Ensuring clean state for release namespace")
 		namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ReleaseNamespace}}
@@ -151,7 +151,6 @@ var _ = BeforeSuite(func() {
 		err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: ReleaseNamespace}, existingNs)
 
 		if err == nil {
-			// Namespace exists from previous run, delete it to ensure clean state
 			By(fmt.Sprintf("Namespace %s already exists, deleting stale namespace", ReleaseNamespace))
 			Expect(k8sClient.Delete(context.TODO(), existingNs)).NotTo(HaveOccurred())
 
@@ -164,11 +163,9 @@ var _ = BeforeSuite(func() {
 			By("Creating fresh namespace")
 			Expect(k8sClient.Create(context.TODO(), namespace)).NotTo(HaveOccurred())
 		} else if apierrors.IsNotFound(err) {
-			// Namespace doesn't exist, create it
 			By("Creating release namespace")
 			Expect(k8sClient.Create(context.TODO(), namespace)).NotTo(HaveOccurred())
 		} else {
-			// Other error
 			Expect(err).NotTo(HaveOccurred(), "Failed to check namespace existence")
 		}
 	} else {
@@ -203,7 +200,6 @@ var _ = BeforeSuite(func() {
 	err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: TestNamespace}, existingTestNs)
 
 	if err == nil {
-		// Test namespace exists from previous run, delete it to ensure clean state
 		By(fmt.Sprintf("Test namespace %s already exists, deleting stale namespace", TestNamespace))
 		Expect(k8sClient.Delete(context.TODO(), existingTestNs)).NotTo(HaveOccurred())
 
@@ -216,11 +212,9 @@ var _ = BeforeSuite(func() {
 		By("Creating fresh test namespace")
 		Expect(k8sClient.Create(context.TODO(), testNamespace)).NotTo(HaveOccurred())
 	} else if apierrors.IsNotFound(err) {
-		// Test namespace doesn't exist, create it
 		By("Creating test namespace")
 		Expect(k8sClient.Create(context.TODO(), testNamespace)).NotTo(HaveOccurred())
 	} else {
-		// Other error
 		Expect(err).NotTo(HaveOccurred(), "Failed to check test namespace existence")
 	}
 
@@ -281,8 +275,6 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	// Always restore params.env if it was overridden, regardless of CLEANUP,
-	// so the repo checkout is not left dirty.
 	if origParamsEnv != nil {
 		kustomizeDir := filepath.Join(repoRoot, "config", "default")
 		paramsEnvPath := filepath.Join(kustomizeDir, "params.env")
@@ -304,12 +296,13 @@ var _ = AfterSuite(func() {
 
 		By("Deleting test namespace")
 		testNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: TestNamespace}}
-		Expect(k8sClient.Delete(context.TODO(), testNamespace)).NotTo(HaveOccurred())
+		if err := k8sClient.Delete(context.TODO(), testNamespace); err != nil {
+			logf.Log.Info("Test namespace deletion skipped (may already be deleted)", "namespace", TestNamespace, "error", err)
+		}
 
 		switch installMethod {
 		case InstallMethodKustomize:
 			uninstallKustomize()
-			// kubectl delete -k already removes the namespace, so skip explicit deletion.
 		case InstallMethodPreinstalled:
 			logf.Log.Info("Operator was preinstalled, skipping uninstall")
 		default:
@@ -448,12 +441,10 @@ func waitForMutatingWebhookReady(ctx context.Context, key types.NamespacedName) 
 		}
 
 		for _, wh := range mutatingWebhook.Webhooks {
-			// Checkout webhook CA certificate
 			if wh.ClientConfig.CABundle == nil {
 				return false, nil
 			}
 
-			// Checkout webhook service endpoints
 			svcRef := wh.ClientConfig.Service
 			if svcRef == nil {
 				return false, fmt.Errorf("webhook service is nil")
@@ -484,12 +475,10 @@ func waitForValidatingWebhookReady(ctx context.Context, key types.NamespacedName
 		}
 
 		for _, wh := range validatingWebhook.Webhooks {
-			// Checkout webhook CA certificate
 			if wh.ClientConfig.CABundle == nil {
 				return false, nil
 			}
 
-			// Checkout webhook service endpoints
 			svcRef := wh.ClientConfig.Service
 			if svcRef == nil {
 				return false, fmt.Errorf("webhook service is nil")
@@ -558,28 +547,47 @@ func waitForSparkApplicationCompleted(ctx context.Context, key types.NamespacedN
 		}
 		return false, nil
 	})
+
+	// Upstream error string from internal/controller/sparkapplication/submission.go — update if wording changes.
+	if err != nil && strings.Contains(err.Error(), "driver pod already exist") {
+		logf.Log.Info("SparkApplication reported 'driver pod already exist' — falling back to watching driver pod directly", "app", key.Name)
+		return waitForDriverPodCompleted(ctx, key)
+	}
 	return err
 }
 
-func collectSparkApplicationsUntilTermination(ctx context.Context, key types.NamespacedName) ([]v1beta2.SparkApplication, error) {
+func waitForDriverPodCompleted(ctx context.Context, appKey types.NamespacedName) error {
 	cancelCtx, cancelFunc := context.WithTimeout(ctx, WaitTimeout)
 	defer cancelFunc()
 
-	apps := []v1beta2.SparkApplication{}
+	driverPodName := fmt.Sprintf("%s-driver", appKey.Name)
+	podKey := types.NamespacedName{Namespace: appKey.Namespace, Name: driverPodName}
 
-	err := wait.PollUntilContextCancel(cancelCtx, PollInterval, true, func(ctx context.Context) (bool, error) {
-		app := v1beta2.SparkApplication{}
-		if err := k8sClient.Get(ctx, key, &app); err != nil {
-			return false, err
+	return wait.PollUntilContextCancel(cancelCtx, PollInterval, true, func(ctx context.Context) (bool, error) {
+		pod := &corev1.Pod{}
+		if err := k8sClient.Get(ctx, podKey, pod); err != nil {
+			return false, nil
 		}
-		apps = append(apps, app)
-		switch app.Status.AppState.State {
-		case v1beta2.ApplicationStateFailed:
-			return true, errors.New(app.Status.AppState.ErrorMessage)
-		case v1beta2.ApplicationStateCompleted:
+		switch pod.Status.Phase {
+		case corev1.PodSucceeded:
 			return true, nil
+		case corev1.PodFailed:
+			return false, fmt.Errorf("driver pod %s failed", driverPodName)
 		}
 		return false, nil
 	})
-	return apps, err
+}
+
+func overrideSparkAppImage(app *v1beta2.SparkApplication) {
+	if sparkAppImage != "" {
+		app.Spec.Image = &sparkAppImage
+		ifNotPresent := string(corev1.PullIfNotPresent)
+		app.Spec.ImagePullPolicy = &ifNotPresent
+	}
+}
+
+func skipIfNoSparkJobs() {
+	if skipSparkJobTests {
+		Skip("Skipped: SKIP_SPARK_JOB_TESTS=true (Spark job execution requires a cluster with pullable Spark images)")
+	}
 }

@@ -217,16 +217,13 @@ jobs:
           echo "Cluster is ready!"
 
       # ======================================================================
-      # Step 6: Install Spark operator via Kustomize
+      # Step 6: Install Spark operator and run Docling E2E test
       # ======================================================================
-      - name: Install Spark operator
-        run: CLEANUP=false make -C examples/openshift operator-install
-
-      # ======================================================================
-      # Step 7: Run Docling Spark E2E test
-      # ======================================================================
-      - name: Run Docling Spark E2E test
-        run: CLEANUP=false make -C examples/openshift test-docling-spark
+      - name: Run OpenShift e2e tests (includes operator install + docling)
+        run: make e2e-rhoai-test
+        env:
+          INSTALL_METHOD: kustomize
+          CLEANUP: "false"
 
       # ======================================================================
       # Step 8: Download and show results

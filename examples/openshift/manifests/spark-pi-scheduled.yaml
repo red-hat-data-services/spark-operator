@@ -9,8 +9,8 @@ spec:
   template:
     type: Scala
     mode: cluster
-    image: docker.io/library/spark:4.0.1
-    imagePullPolicy: IfNotPresent
+    image: quay.io/opendatahub/data-processing:Spark-v4.0.1
+    imagePullPolicy: Always
     mainClass: org.apache.spark.examples.SparkPi
     mainApplicationFile: local:///opt/spark/examples/jars/spark-examples.jar
     sparkVersion: 4.0.1
@@ -24,12 +24,10 @@ spec:
         capabilities:
           drop:
           - ALL
-        runAsGroup: 185
-        runAsUser: 185
         runAsNonRoot: true
         allowPrivilegeEscalation: false
         seccompProfile:
-          type: RuntimeDefault      
+          type: RuntimeDefault
     executor:
       instances: 1
       cores: 1
@@ -38,8 +36,6 @@ spec:
         capabilities:
           drop:
           - ALL
-        runAsGroup: 185
-        runAsUser: 185
         runAsNonRoot: true
         allowPrivilegeEscalation: false
         seccompProfile:

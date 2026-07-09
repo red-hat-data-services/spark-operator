@@ -89,7 +89,10 @@ jobs:
           echo "SPARK_OPERATOR_IMAGE=${FULL_IMAGE}" >> "$GITHUB_ENV"
 
       - name: Run kustomize e2e tests
-        run: make -C examples/openshift e2e-kustomize-test
+        run: make e2e-rhoai-test
+        env:
+          INSTALL_METHOD: kustomize
+          SKIP_SPARK_JOB_TESTS: "true"
 
       - name: Debug - Show cluster state
         if: failure()

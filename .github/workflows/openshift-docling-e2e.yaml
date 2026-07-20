@@ -203,7 +203,7 @@ jobs:
           K8S_VERSION: ${{ inputs.k8s_version || 'v1.30.8' }}
           KIND_KUBE_CONFIG: ${{ env.KUBECONFIG }}
           DOCLING_IMAGE: quay.io/rishasin/docling-spark@sha256:7e8431fc89dbc6c10aec1f0401aadd9c9cd66b9728fbcb98f6bf40ba3e3b4cdb
-        run: make -C examples/openshift kind-setup-full
+        run: make -C test/e2e/rhoai kind-setup-full
 
       # ======================================================================
       # Step 5: Verify cluster is ready
@@ -219,8 +219,8 @@ jobs:
       # ======================================================================
       # Step 6: Install Spark operator and run Docling E2E test
       # ======================================================================
-      - name: Run OpenShift e2e tests (includes operator install + docling)
-        run: make e2e-rhoai-test
+      - name: Run RHOAI docling e2e test
+        run: make -C test/e2e/rhoai e2e-docling-test
         env:
           INSTALL_METHOD: kustomize
           CLEANUP: "false"
@@ -375,7 +375,7 @@ jobs:
       # ======================================================================
       - name: Cleanup Kind cluster
         if: always()
-        run: make -C examples/openshift kind-cleanup || true
+        run: make -C test/e2e/rhoai kind-cleanup || true
 
   # ============================================================================
   # Job 3: Stop EC2 Runner

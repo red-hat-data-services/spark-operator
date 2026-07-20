@@ -3,10 +3,10 @@
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
-# Directory paths (relative to this Makefile in examples/openshift/)
+# Directory paths
 MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-REPO_ROOT := $(abspath $(MAKEFILE_DIR)/../..)
-SCRIPTS_DIR := $(MAKEFILE_DIR)/scripts
+REPO_ROOT := $(abspath $(MAKEFILE_DIR)/../../..)
+SCRIPTS_DIR := $(REPO_ROOT)/examples/openshift/scripts
 CONTEXT ?= $(REPO_ROOT)
 
 # Include repo root bin/ in PATH so tools installed by the root Makefile
@@ -17,6 +17,7 @@ export PATH := $(LOCALBIN):$(PATH)
 # Configuration
 KIND_CLUSTER_NAME ?= spark-operator
 CLEANUP ?= true
+IMAGE_TAG ?= local
 
 ##@ General
 
@@ -29,14 +30,14 @@ help: ## Display this help.
 .PHONY: kind-setup
 kind-setup: ## Setup a local Kind cluster for testing.
 	@echo "Setting up Kind cluster..."
-	chmod +x $(SCRIPTS_DIR)/setup-kind-cluster.sh
-	$(SCRIPTS_DIR)/setup-kind-cluster.sh
+	chmod +x $(SCRIPTS_DIR)/setup-docling-kind-cluster.sh
+	$(SCRIPTS_DIR)/setup-docling-kind-cluster.sh
 
 .PHONY: kind-setup-full
 kind-setup-full: ## Setup Kind cluster with docling image and test assets.
 	@echo "Setting up Kind cluster with full docling setup..."
-	chmod +x $(SCRIPTS_DIR)/setup-kind-cluster.sh
-	$(SCRIPTS_DIR)/setup-kind-cluster.sh --with-docling --upload-assets
+	chmod +x $(SCRIPTS_DIR)/setup-docling-kind-cluster.sh
+	$(SCRIPTS_DIR)/setup-docling-kind-cluster.sh --with-docling --upload-assets
 
 .PHONY: kind-cleanup
 kind-cleanup: ## Delete the Kind cluster and cleanup resources.
@@ -50,10 +51,16 @@ kind-cleanup: ## Delete the Kind cluster and cleanup resources.
 ## Use CLEANUP=false to skip cleanup (default: true).
 
 .PHONY: e2e-rhoai-test
-e2e-rhoai-test: ## Run midstream Go e2e tests (kustomize or preinstalled).
-	@echo "Running OpenShift e2e tests..."
+e2e-rhoai-test: ## Run midstream RHOAI e2e tests (kustomize or preinstalled).
+	@echo "Running RHOAI e2e tests (install_method=$(INSTALL_METHOD))..."
 	cd $(REPO_ROOT) && INSTALL_METHOD=$(INSTALL_METHOD) SPARK_OPERATOR_IMAGE=$(SPARK_OPERATOR_IMAGE) \
-		go test ./test/e2e/rhoai/ -v -ginkgo.v -timeout 30m -coverprofile cover-e2e-openshift.out
+		go test ./test/e2e/rhoai/ -v -ginkgo.v -timeout 30m -coverprofile cover-e2e-rhoai.out
+
+.PHONY: e2e-docling-test
+e2e-docling-test: ## Run only the docling Spark e2e test.
+	@echo "Running RHOAI docling e2e test..."
+	cd $(REPO_ROOT) && INSTALL_METHOD=$(INSTALL_METHOD) SPARK_OPERATOR_IMAGE=$(SPARK_OPERATOR_IMAGE) \
+		go test ./test/e2e/rhoai/ -v -ginkgo.v -timeout 30m -run "Docling"
 
 .PHONY: e2e-kueue-test
 e2e-kueue-test: ## Run Kueue integration tests (requires OpenShift + Kueue).
@@ -75,7 +82,7 @@ test-all: ## Run all e2e tests (upstream + midstream).
 ##@ Image Build/Load (CI and local)
 
 .PHONY: docker-build-file
-docker-build-file: ## Build docker image with a specific Dockerfile. Usage: make -C examples/openshift docker-build-file DOCKERFILE=path IMAGE=<full_image>
+docker-build-file: ## Build docker image with a specific Dockerfile. Usage: make docker-build-file DOCKERFILE=path IMAGE=<full_image>
 	@if [ -z "$(DOCKERFILE)" ]; then echo "ERROR: DOCKERFILE is required (e.g., DOCKERFILE=examples/openshift/Dockerfile.odh)"; exit 1; fi
 	@if [ -z "$(IMAGE)" ]; then echo "ERROR: IMAGE is required (e.g., IMAGE=quay.io/opendatahub/spark-operator:local)"; exit 1; fi
 	@DF="$(DOCKERFILE)"; \
@@ -88,6 +95,6 @@ docker-build-file: ## Build docker image with a specific Dockerfile. Usage: make
 	fi
 
 .PHONY: kind-load-image-file
-kind-load-image-file: ## Load a specifically built image into Kind. Usage: make -C examples/openshift kind-load-image-file IMAGE=<full_image>
+kind-load-image-file: ## Load a specifically built image into Kind. Usage: make kind-load-image-file IMAGE=<full_image>
 	@if [ -z "$(IMAGE)" ]; then echo "ERROR: IMAGE is required (e.g., IMAGE=quay.io/opendatahub/spark-operator:local)"; exit 1; fi
 	kind load docker-image --name $(KIND_CLUSTER_NAME) $(IMAGE)

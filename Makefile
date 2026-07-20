@@ -178,16 +178,6 @@ e2e-test: envtest ## Run the e2e tests against a Kind k8s instance that is spun 
 	@echo "Running e2e tests (deploy_method=$(DEPLOY_METHOD))..."
 	DEPLOY_METHOD=$(DEPLOY_METHOD) IMAGE_TAG=$(IMAGE_TAG) go test ./test/e2e/ -v -ginkgo.v -timeout 30m
 
-.PHONY: e2e-rhoai-test
-e2e-rhoai-test: envtest ## Run the RHOAI/midstream e2e tests (kustomize or preinstalled).
-	@echo "Running OpenShift e2e tests (install_method=$(INSTALL_METHOD))..."
-	INSTALL_METHOD=$(INSTALL_METHOD) SPARK_OPERATOR_IMAGE=$(SPARK_OPERATOR_IMAGE) go test ./test/e2e/rhoai/ -v -ginkgo.v -timeout 30m -coverprofile cover-e2e-openshift.out
-
-.PHONY: e2e-kueue-test
-e2e-kueue-test: ## Run the Kueue integration tests (requires OpenShift + Kueue).
-	@echo "Running Kueue integration tests..."
-	go test -tags openshift ./test/e2e/rhoai/kueue/ -v -ginkgo.v -timeout 35m
-
 ##@ Kustomize
 
 .PHONY: kustomize-set-image

@@ -1,10 +1,13 @@
 #!/bin/bash
-# setup-kind-cluster.sh - Sets up Kind cluster for OpenShift e2e tests
+# setup-docling-kind-cluster.sh - Sets up Kind cluster for docling e2e tests
+#
+# This script goes beyond upstream's `make kind-create-cluster` by also creating
+# namespaces, PVCs, and optionally loading the docling image + test assets.
 #
 # Usage:
-#   ./setup-kind-cluster.sh                    # Basic setup
-#   ./setup-kind-cluster.sh --with-docling     # Also load docling-spark image
-#   ./setup-kind-cluster.sh --upload-assets    # Also upload test PDFs
+#   ./setup-docling-kind-cluster.sh                    # Basic setup
+#   ./setup-docling-kind-cluster.sh --with-docling     # Also load docling-spark image
+#   ./setup-docling-kind-cluster.sh --upload-assets    # Also upload test PDFs
 
 set -euo pipefail # Exit immediately on non-zero status
 

@@ -18,11 +18,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY spark-operator-module/cmd/spark-operator-module/ cmd/spark-operator-module/
 COPY spark-operator-module/pkg/              pkg/
 
+ARG TARGETARCH
 ARG GOTAGS="distro"
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 GOOS=linux GOEXPERIMENT=strictfipsruntime go build -tags "${GOTAGS},strictfipsruntime" -a -o manager ./cmd/spark-operator-module
+    CGO_ENABLED=1 GOOS=linux GOARCH=${TARGETARCH} GOEXPERIMENT=strictfipsruntime go build -tags "${GOTAGS},strictfipsruntime" -a -o manager ./cmd/spark-operator-module
 
 # Collect Spark workload operator manifests from this repo
 COPY spark-operator-module/hack/  hack/

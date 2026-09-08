@@ -7,7 +7,7 @@
 --index-url https://console.redhat.com/api/pypi/public-rhai/rhoai/3.6-EA1/cpu-ubi9/simple/
 
 py4j==0.10.9.9 \
-    --hash=sha256:9d28ccc833a9a99abee95569452f7782cec39cd1d57e872577e8216aa1abbc48
+    --hash=sha256:7e187f831cea20bf9afde1f89a83a365cb26f6952498555ff460cc8d570f96ab
     # via pyspark
 pyspark==4.0.4 \
     --hash=sha256:2c4b04c614d61bed83056661fc26c23ef53d04594ff987738b95db32dfae082c

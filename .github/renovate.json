@@ -1,6 +1,15 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>red-hat-data-services/konflux-central//renovate/default-renovate.json5"
+    "github>red-hat-data-services/konflux-central//renovate/default-renovate.json5",
+    "github>opendatahub-io/renovate-config//base-images"
+  ],
+  "packageRules": [
+    {
+      "description": "Let the AIPCC regex manager own base image tag updates without digest pinning interference from the built-in Dockerfile manager",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["quay.io/aipcc/base-images/**"],
+      "pinDigests": false
+    }
   ]
 }

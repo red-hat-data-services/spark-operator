@@ -6,6 +6,7 @@ on:
     - cron: '0 4 * * 1'
   pull_request:
     branches:
+      - main
       - master
       - release-*
       - rhoai-*
@@ -16,6 +17,7 @@ on:
 
   push:
     branches:
+      - main
       - master
       - release-*
       - rhoai-*

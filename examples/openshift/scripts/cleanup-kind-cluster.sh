@@ -17,16 +17,16 @@ pass() { echo "✅ $1"; }
 # Step 1: Delete namespace
 # ==========================================
 log "Deleting namespace: $SPARK_NAMESPACE"
-kubectl delete namespace "$SPARK_NAMESPACE" --ignore-not-found --wait=false 2>/dev/null || true
+kubectl delete namespace "$SPARK_NAMESPACE" --ignore-not-found --wait=false 2> /dev/null || true
 
 # ===========================================
 # Step 2: Delete Kind cluster
 # ===========================================
 log "Deleting Kind cluster: $KIND_CLUSTER_NAME"
-if command -v kind &>/dev/null; then
-    kind delete cluster --name "$KIND_CLUSTER_NAME" --kubeconfig "$KIND_KUBE_CONFIG" 2>/dev/null || true
+if command -v kind &> /dev/null; then
+  kind delete cluster --name "$KIND_CLUSTER_NAME" --kubeconfig "$KIND_KUBE_CONFIG" 2> /dev/null || true
 else
-    log "Warning: kind not found in PATH, skipping cluster deletion"
+  log "Warning: kind not found in PATH, skipping cluster deletion"
 fi
 
 pass "Cleanup complete!"

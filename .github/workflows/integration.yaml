@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -88,7 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -111,7 +111,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -133,17 +133,12 @@ jobs:
       - name: Determine branch name
         id: get_branch
         run: |
-          BRANCH=""
-          if [ "${{ github.event_name }}" == "push" ]; then
-            BRANCH=${GITHUB_REF_NAME}
-          elif [ "${{ github.event_name }}" == "pull_request" ]; then
-            BRANCH=${GITHUB_BASE_REF}
-          fi
+          BRANCH="${GITHUB_BASE_REF:-$GITHUB_REF_NAME}"
           echo "Branch name: $BRANCH"
           echo "BRANCH=$BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -182,7 +177,7 @@ jobs:
         env:
           BRANCH: ${{ steps.get_branch.outputs.BRANCH }}
         run: |
-          changed=$(ct list-changed --target-branch $BRANCH)
+          changed=$(ct list-changed --target-branch "$BRANCH")
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -191,7 +186,7 @@ jobs:
         if: steps.list-changed.outputs.changed == 'true'
         env:
           BRANCH: ${{ steps.get_branch.outputs.BRANCH }}
-        run: ct lint --check-version-increment=false --target-branch $BRANCH
+        run: ct lint --check-version-increment=false --target-branch "$BRANCH"
 
       - name: Produce the helm documentation
         if: steps.list-changed.outputs.changed == 'true'
@@ -235,7 +230,7 @@ jobs:
     name: e2e-test (${{ matrix.k8s_version }}, ${{ matrix.deploy_method }})
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false

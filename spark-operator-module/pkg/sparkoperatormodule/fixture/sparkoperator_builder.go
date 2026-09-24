@@ -22,6 +22,15 @@ func WithManagementState(state common.ManagementState) SparkOperatorOption {
 	}
 }
 
+func WithJobNamespaces(namespaces ...string) SparkOperatorOption {
+	return func(cr *platformv1alpha1.SparkOperator) {
+		if cr.Spec.Spark == nil {
+			cr.Spec.Spark = &platformv1alpha1.SparkSpec{}
+		}
+		cr.Spec.Spark.JobNamespaces = append([]string(nil), namespaces...)
+	}
+}
+
 func SparkOperatorCR(opts ...SparkOperatorOption) *platformv1alpha1.SparkOperator {
 	cr := &platformv1alpha1.SparkOperator{
 		ObjectMeta: metav1.ObjectMeta{

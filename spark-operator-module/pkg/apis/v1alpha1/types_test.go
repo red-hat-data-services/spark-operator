@@ -46,6 +46,32 @@ func TestGetManagementState_NilDefaultsToManaged(t *testing.T) {
 	g.Expect(GetManagementState(nil)).To(Equal(common.Managed))
 }
 
+func TestResolveJobNamespaces_DefaultWhenUnset(t *testing.T) {
+	g := NewWithT(t)
+
+	g.Expect(ResolveJobNamespaces(nil)).To(Equal([]string{"default"}))
+	g.Expect(ResolveJobNamespaces(&SparkOperator{})).To(Equal([]string{"default"}))
+	g.Expect(ResolveJobNamespaces(&SparkOperator{
+		Spec: SparkOperatorSpec{Spark: &SparkSpec{}},
+	})).To(Equal([]string{"default"}))
+	g.Expect(ResolveJobNamespaces(&SparkOperator{
+		Spec: SparkOperatorSpec{Spark: &SparkSpec{JobNamespaces: []string{"", ""}}},
+	})).To(Equal([]string{"default"}))
+}
+
+func TestResolveJobNamespaces_UsesConfiguredList(t *testing.T) {
+	g := NewWithT(t)
+
+	got := ResolveJobNamespaces(&SparkOperator{
+		Spec: SparkOperatorSpec{
+			Spark: &SparkSpec{
+				JobNamespaces: []string{"default", "spark-bench-a", "default", "", "spark-bench-b"},
+			},
+		},
+	})
+	g.Expect(got).To(Equal([]string{"default", "spark-bench-a", "spark-bench-b"}))
+}
+
 func TestSparkOperatorAccessors(t *testing.T) {
 	g := NewWithT(t)
 

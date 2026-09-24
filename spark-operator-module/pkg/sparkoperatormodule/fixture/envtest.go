@@ -130,6 +130,44 @@ metadata:
   namespace: opendatahub
 data:
   test: "true"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: spark-operator-webhook-mutating
+webhooks:
+  - name: mutate-sparkapplication.sparkoperator.k8s.io
+    clientConfig:
+      service:
+        name: spark-operator-webhook
+        namespace: opendatahub
+        path: /mutate
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: ["default"]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: spark-operator-webhook-validating
+webhooks:
+  - name: validate-sparkapplication.sparkoperator.k8s.io
+    clientConfig:
+      service:
+        name: spark-operator-webhook
+        namespace: opendatahub
+        path: /validate
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: ["default"]
 `
 	componentMetadata := fmt.Sprintf(`releases:
   - name: %s

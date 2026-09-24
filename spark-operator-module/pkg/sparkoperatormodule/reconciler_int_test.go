@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/opendatahub-io/odh-platform-utilities/api/common"
@@ -133,6 +134,48 @@ var _ = Describe("SparkOperatorModule Reconciler", func() {
 			g.Expect(cond).NotTo(BeNil())
 			g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
 		}).WithContext(ctx).Should(Succeed())
+	})
+
+	It("applies spark.jobNamespaces to webhook namespaceSelectors", func(ctx SpecContext) {
+		cr := fixture.SparkOperatorCR(fixture.WithJobNamespaces("default", "spark-bench-a", "spark-bench-b"))
+		Expect(testEnv.Client.Create(ctx, cr)).To(Succeed())
+		DeferCleanup(func(ctx SpecContext) {
+			Expect(client.IgnoreNotFound(testEnv.Client.Delete(ctx, cr))).To(Succeed())
+		})
+
+		Eventually(func(g Gomega) {
+			g.Expect(testEnv.Client.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(Succeed())
+			cond := fixture.FindCondition(cr, string(common.ConditionTypeProvisioningSucceeded))
+			g.Expect(cond).NotTo(BeNil())
+			g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		}).WithContext(ctx).Should(Succeed())
+
+		lastCall := testEnv.Deployer.LastCall()
+		Expect(lastCall).NotTo(BeNil())
+
+		want := []any{"default", "spark-bench-a", "spark-bench-b"}
+		foundWebhook := false
+		for _, res := range lastCall.Resources {
+			kind := res.GetKind()
+			if kind != "MutatingWebhookConfiguration" && kind != "ValidatingWebhookConfiguration" {
+				continue
+			}
+			foundWebhook = true
+			webhooks, found, err := unstructured.NestedSlice(res.Object, "webhooks")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			for _, raw := range webhooks {
+				webhook := raw.(map[string]any)
+				selector := webhook["namespaceSelector"].(map[string]any)
+				exprs := selector["matchExpressions"].([]any)
+				Expect(exprs).To(HaveLen(1))
+				expr := exprs[0].(map[string]any)
+				Expect(expr["key"]).To(Equal("kubernetes.io/metadata.name"))
+				Expect(expr["operator"]).To(Equal("In"))
+				Expect(expr["values"]).To(Equal(want))
+			}
+		}
+		Expect(foundWebhook).To(BeTrue())
 	})
 
 	Context("readiness transitions and status completeness", Ordered, func() {

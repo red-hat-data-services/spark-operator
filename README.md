@@ -147,3 +147,4 @@ For contributing to Spark Operator, please refer to [Contributor Guide](CONTRIBU
 ## Adopters
 
 Check out [adopters of Spark Operator](ADOPTERS.md).
+

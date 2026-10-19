@@ -23,6 +23,7 @@ spec:
         app.kubernetes.io/component: webhook
       annotations:
         prometheus.io/scrape: "true"
+        prometheus.io/scheme: "https"
         prometheus.io/port: "8080"
         prometheus.io/path: /metrics
     spec:
@@ -48,6 +49,7 @@ spec:
             - --mutating-webhook-name=mutating-webhook-configuration
             - --validating-webhook-name=validating-webhook-configuration
             - --enable-metrics=true
+            - --secure-metrics=true
             - --metrics-bind-address=:8080
             - --metrics-endpoint=/metrics
             - --metrics-prefix=

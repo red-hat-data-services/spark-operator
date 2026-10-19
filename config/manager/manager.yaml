@@ -35,6 +35,7 @@ spec:
       annotations:
         kubectl.kubernetes.io/default-container: controller
         prometheus.io/scrape: "true"
+        prometheus.io/scheme: "https"
         prometheus.io/port: "8080"
         prometheus.io/path: /metrics
     spec:
@@ -68,6 +69,7 @@ spec:
             - --controller-threads=10
             - --enable-ui-service=true
             - --enable-metrics=true
+            - --secure-metrics=true
             - --metrics-bind-address=:8080
             - --metrics-endpoint=/metrics
             - --metrics-prefix=

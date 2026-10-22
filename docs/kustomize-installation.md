@@ -4,6 +4,11 @@ This guide covers deploying and customizing the Spark Operator using its
 [Kustomize](https://kustomize.io/) manifests.  The Kustomize manifests live
 under `config/` and provide a Helm-free, declarative installation path.
 
+> **ODH / RHOAI deployments:** If you are integrating via the
+> opendatahub-operator (spark-operator-module), see the
+> [ODH / RHOAI Integration Contract](odh-integration-contract.md) for the
+> env-var, overlay, and image-injection contract.
+
 ## Architecture Breakdown
 
 `config/default/kustomization.yaml` is the main entry point.  It aggregates

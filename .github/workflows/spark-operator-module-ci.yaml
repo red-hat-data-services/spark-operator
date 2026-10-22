@@ -160,6 +160,14 @@ jobs:
           echo "Spark operator pods are running:"
           kubectl get pods -n opendatahub
 
+      - name: Verify platform version handshake
+        run: |
+          PLATFORM_VERSION=$(kubectl get configmap odh-sparkoperator-config -n opendatahub \
+            -o jsonpath='{.data.platformVersion}')
+          kubectl wait sparkoperator/default-sparkoperator \
+            --for=jsonpath='{.status.releases[?(@.name=="platform")].version}'="$PLATFORM_VERSION" \
+            --timeout=120s
+
       - name: Run spark-operator E2E tests (preinstalled mode)
         run: |
           cd test/e2e/rhoai && \

@@ -129,6 +129,13 @@ func installModuleOperator() {
 		logf.Log.Info("Namespace already exists or error creating", "error", err)
 	}
 
+	By("Creating platform config ConfigMap")
+	platformConfig := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "odh-sparkoperator-config", Namespace: ModuleNamespace},
+		Data:       map[string]string{"platformVersion": "test"},
+	}
+	Expect(client.IgnoreAlreadyExists(k8sClient.Create(context.TODO(), platformConfig))).To(Succeed())
+
 	By("Installing the module operator via Kustomize")
 	applyCmd := exec.Command("kubectl", "apply", "-k", kustomizeDir, "--server-side=true")
 	applyCmd.Stdout = GinkgoWriter

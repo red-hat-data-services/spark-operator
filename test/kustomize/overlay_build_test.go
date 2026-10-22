@@ -20,8 +20,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -95,6 +98,46 @@ func networkPolicyPorts(np *networkingv1.NetworkPolicy) []int32 {
 		}
 	}
 	return ports
+}
+
+// requiredOverlayResources lists every resource kind+name that the
+// opendatahub-operator (via spark-operator-module) depends on. Adding or
+// renaming a resource requires updating this list.
+var requiredOverlayResources = []struct {
+	Kind string
+	Name string
+}{
+	{"CustomResourceDefinition", "sparkapplications.sparkoperator.k8s.io"},
+	{"CustomResourceDefinition", "scheduledsparkapplications.sparkoperator.k8s.io"},
+	{"CustomResourceDefinition", "sparkconnects.sparkoperator.k8s.io"},
+	{"ServiceAccount", "spark-operator-controller"},
+	{"ServiceAccount", "spark-operator-webhook"},
+	{"Deployment", "spark-operator-controller"},
+	{"Deployment", "spark-operator-webhook"},
+	{"ClusterRole", "spark-operator-controller"},
+	{"ClusterRole", "spark-operator-webhook"},
+	{"ClusterRoleBinding", "spark-operator-controller"},
+	{"ClusterRoleBinding", "spark-operator-webhook"},
+	{"Role", "spark-operator-controller"},
+	{"Role", "spark-operator-webhook"},
+	{"RoleBinding", "spark-operator-controller"},
+	{"RoleBinding", "spark-operator-webhook"},
+	{"Service", "spark-operator-webhook-svc"},
+	{"MutatingWebhookConfiguration", "mutating-webhook-configuration"},
+	{"ValidatingWebhookConfiguration", "validating-webhook-configuration"},
+}
+
+// namespacedKinds lists resource kinds that must carry a namespace in the
+// rendered output. Cluster-scoped kinds are excluded.
+var namespacedKinds = map[string]bool{
+	"ConfigMap":      true,
+	"Deployment":     true,
+	"NetworkPolicy":  true,
+	"PodMonitor":     true,
+	"Role":           true,
+	"RoleBinding":    true,
+	"Service":        true,
+	"ServiceAccount": true,
 }
 
 // TestOverlayBuilds validates that both ODH and RHOAI overlays build
@@ -223,7 +266,7 @@ func TestOverlayBuilds(t *testing.T) {
 					"allow-internal ports must be Spark RPC/UI/Connect only")
 			})
 
-			t.Run("MetricsScrapeNetworkPolicy", func(t *testing.T) {
+			t.Run("OperatorMetricsNetworkPolicy", func(t *testing.T) {
 				obj := overlayFindResource(resources, "NetworkPolicy", "spark-operator-allow-metrics")
 				require.NotNil(t, obj, "overlay %s must include spark-operator-allow-metrics", overlay.name)
 				np := overlayConvertTo[networkingv1.NetworkPolicy](t, obj)
@@ -235,22 +278,99 @@ func TestOverlayBuilds(t *testing.T) {
 					"metrics NP must not select Spark job pods")
 
 				require.Equal(t, []networkingv1.PolicyType{networkingv1.PolicyTypeIngress}, np.Spec.PolicyTypes)
-				require.Len(t, np.Spec.Ingress, 1, "metrics NP must be a single ingress rule")
-				rule := np.Spec.Ingress[0]
-				require.Len(t, rule.Ports, 1)
-				require.NotNil(t, rule.Ports[0].Port)
-				assert.Equal(t, int32(8080), rule.Ports[0].Port.IntVal)
-				require.NotNil(t, rule.Ports[0].Protocol)
-				assert.Equal(t, corev1.ProtocolTCP, *rule.Ports[0].Protocol)
+				require.Len(t, np.Spec.Ingress, 2, "metrics NP must have metrics + health ingress rules")
 
-				require.Len(t, rule.From, 1, "metrics NP must have exactly one from clause")
-				from := rule.From[0]
+				metricsRule := np.Spec.Ingress[0]
+				require.Len(t, metricsRule.Ports, 2, "metrics rule must allow 8080 + 8443")
+				metricsPorts := []int32{metricsRule.Ports[0].Port.IntVal, metricsRule.Ports[1].Port.IntVal}
+				assert.ElementsMatch(t, []int32{8080, 8443}, metricsPorts)
+				for _, p := range metricsRule.Ports {
+					require.NotNil(t, p.Protocol)
+					assert.Equal(t, corev1.ProtocolTCP, *p.Protocol)
+				}
+				require.Len(t, metricsRule.From, 1, "metrics rule must have exactly one from clause")
+				from := metricsRule.From[0]
 				assert.Nil(t, from.PodSelector, "do not allow all pods via empty podSelector")
 				require.NotNil(t, from.NamespaceSelector)
 				assert.Equal(t, map[string]string{"network.openshift.io/policy-group": "monitoring"},
 					from.NamespaceSelector.MatchLabels,
-					"8080 must be limited to monitoring namespaces")
+					"metrics ports must be limited to monitoring namespaces")
 				assert.Empty(t, from.NamespaceSelector.MatchExpressions)
+
+				healthRule := np.Spec.Ingress[1]
+				require.Len(t, healthRule.Ports, 1)
+				require.NotNil(t, healthRule.Ports[0].Port)
+				assert.Equal(t, int32(8081), healthRule.Ports[0].Port.IntVal)
+				require.NotNil(t, healthRule.Ports[0].Protocol)
+				assert.Equal(t, corev1.ProtocolTCP, *healthRule.Ports[0].Protocol)
+				assert.Empty(t, healthRule.From, "8081 health must be port-scoped only")
+			})
+
+			t.Run("OperatorEgressNetworkPolicy", func(t *testing.T) {
+				obj := overlayFindResource(resources, "NetworkPolicy", "spark-operator-allow-egress")
+				require.NotNil(t, obj, "overlay %s must include spark-operator-allow-egress", overlay.name)
+				np := overlayConvertTo[networkingv1.NetworkPolicy](t, obj)
+				assert.Equal(t, overlay.namespace, np.Namespace)
+
+				assert.Equal(t, "spark-operator", np.Spec.PodSelector.MatchLabels["app.kubernetes.io/name"],
+					"egress NP must select controller/webhook pods")
+				assert.NotContains(t, np.Spec.PodSelector.MatchLabels, "sparkoperator.k8s.io/launched-by-spark-operator",
+					"egress NP must not select Spark job pods")
+
+				require.Equal(t, []networkingv1.PolicyType{networkingv1.PolicyTypeEgress}, np.Spec.PolicyTypes)
+				require.Len(t, np.Spec.Egress, 1, "egress NP must declare exactly one rule")
+				assert.Empty(t, np.Spec.Egress[0].To, "egress rule must be the explicit allow-all rule")
+				assert.Empty(t, np.Spec.Egress[0].Ports, "egress rule must be the explicit allow-all rule")
+			})
+
+			t.Run("WebhookIngressNetworkPolicy", func(t *testing.T) {
+				obj := overlayFindResource(resources, "NetworkPolicy", "spark-operator-allow-webhook")
+				require.NotNil(t, obj, "overlay %s must include spark-operator-allow-webhook", overlay.name)
+				np := overlayConvertTo[networkingv1.NetworkPolicy](t, obj)
+				assert.Equal(t, overlay.namespace, np.Namespace)
+
+				assert.Equal(t, "spark-operator", np.Spec.PodSelector.MatchLabels["app.kubernetes.io/name"],
+					"webhook NP must select operator pods")
+				assert.NotContains(t, np.Spec.PodSelector.MatchLabels, "sparkoperator.k8s.io/launched-by-spark-operator",
+					"webhook NP must not select Spark job pods")
+
+				require.Equal(t, []networkingv1.PolicyType{networkingv1.PolicyTypeIngress}, np.Spec.PolicyTypes)
+				require.Len(t, np.Spec.Ingress, 1, "webhook NP must be a single ingress rule")
+				rule := np.Spec.Ingress[0]
+				require.Len(t, rule.Ports, 1)
+				require.NotNil(t, rule.Ports[0].Port)
+				assert.Equal(t, int32(9443), rule.Ports[0].Port.IntVal)
+				require.NotNil(t, rule.Ports[0].Protocol)
+				assert.Equal(t, corev1.ProtocolTCP, *rule.Ports[0].Protocol)
+				assert.Empty(t, rule.From,
+					"webhook ingress is port-scoped only: API-server traffic is node-sourced and unselectable (ADR-0016)")
+			})
+
+			t.Run("WebhookPortMatchesServiceAndDeployment", func(t *testing.T) {
+				svcObj := overlayFindResource(resources, "Service", "spark-operator-webhook-svc")
+				require.NotNil(t, svcObj, "Service/spark-operator-webhook-svc not found")
+				svc := overlayConvertTo[corev1.Service](t, svcObj)
+				require.Len(t, svc.Spec.Ports, 1)
+				assert.Equal(t, int32(443), svc.Spec.Ports[0].Port)
+				assert.Equal(t, "webhook", svc.Spec.Ports[0].TargetPort.String(),
+					"service must target the named webhook port")
+
+				depObj := overlayFindResource(resources, "Deployment", "spark-operator-webhook")
+				require.NotNil(t, depObj)
+				dep := overlayConvertTo[appsv1.Deployment](t, depObj)
+				require.NotEmpty(t, dep.Spec.Template.Spec.Containers)
+				c := dep.Spec.Template.Spec.Containers[0]
+				var webhookPort *corev1.ContainerPort
+				for i := range c.Ports {
+					if c.Ports[i].Name == "webhook" {
+						p := c.Ports[i]
+						webhookPort = &p
+						break
+					}
+				}
+				require.NotNil(t, webhookPort, "spark-operator-webhook must expose named port webhook")
+				assert.Equal(t, int32(9443), webhookPort.ContainerPort,
+					"webhook port must be 9443 to match spark-operator-allow-webhook")
 			})
 
 			t.Run("MetricsPortMatchesPodMonitorAndDeployments", func(t *testing.T) {
@@ -281,7 +401,7 @@ func TestOverlayBuilds(t *testing.T) {
 					}
 					require.NotNil(t, metricsPort, "%s must expose named port metrics", depName)
 					assert.Equal(t, int32(8080), metricsPort.ContainerPort,
-						"%s metrics port must be 8080 to match spark-operator-allow-metrics", depName)
+						"%s metrics port must be 8080", depName)
 				}
 			})
 
@@ -303,6 +423,149 @@ func TestOverlayBuilds(t *testing.T) {
 				assert.True(t, found,
 					"ClusterRole/spark-operator-controller must include networkpolicies RBAC")
 			})
+
+			// --- Inter-dependency contract assertions (RHOAIENG-96585) ---
+
+			t.Run("RequiredResourcesContract", func(t *testing.T) {
+				for _, req := range requiredOverlayResources {
+					obj := overlayFindResource(resources, req.Kind, req.Name)
+					assert.NotNilf(t, obj,
+						"required resource %s/%s not found in %s overlay",
+						req.Kind, req.Name, overlay.name)
+				}
+			})
+
+			t.Run("NamespacedResourcesMustCarryNamespace", func(t *testing.T) {
+				for _, r := range resources {
+					if !namespacedKinds[r.GetKind()] {
+						continue
+					}
+					assert.Equal(t, overlay.namespace, r.GetNamespace(),
+						"%s/%s must have namespace %q, got %q",
+						r.GetKind(), r.GetName(), overlay.namespace, r.GetNamespace())
+				}
+			})
+
+			t.Run("ImagePlaceholdersSubstituted", func(t *testing.T) {
+				for _, depName := range []string{"spark-operator-controller", "spark-operator-webhook"} {
+					depObj := overlayFindResource(resources, "Deployment", depName)
+					require.NotNil(t, depObj)
+					dep := overlayConvertTo[appsv1.Deployment](t, depObj)
+					for _, c := range dep.Spec.Template.Spec.Containers {
+						assert.NotContains(t, c.Image, "$(",
+							"Deployment %s container %s still has unsubstituted placeholder",
+							depName, c.Name)
+					}
+				}
+			})
+
+			t.Run("WebhookServiceRefs", func(t *testing.T) {
+				for _, whName := range []string{"mutating-webhook-configuration", "validating-webhook-configuration"} {
+					obj := overlayFindResource(resources, whichWebhookKind(whName), whName)
+					require.NotNilf(t, obj, "%s not found", whName)
+
+					entries, _, _ := unstructured.NestedSlice(obj.Object, "webhooks")
+					require.NotEmpty(t, entries, "%s has no webhook entries", whName)
+
+					for _, entry := range entries {
+						m, ok := entry.(map[string]interface{})
+						require.True(t, ok)
+						svcName, _, _ := unstructured.NestedString(m, "clientConfig", "service", "name")
+						svcNs, _, _ := unstructured.NestedString(m, "clientConfig", "service", "namespace")
+						assert.Equal(t, "spark-operator-webhook-svc", svcName,
+							"%s webhook should reference spark-operator-webhook-svc", whName)
+						assert.Equal(t, overlay.namespace, svcNs,
+							"%s webhook service namespace should be %s", whName, overlay.namespace)
+					}
+				}
+			})
+
+			t.Run("StandardPodLabels", func(t *testing.T) {
+				for _, name := range []string{"spark-operator-controller", "spark-operator-webhook"} {
+					obj := overlayFindResource(resources, "Deployment", name)
+					require.NotNilf(t, obj, "Deployment %s not found", name)
+					dep := overlayConvertTo[appsv1.Deployment](t, obj)
+					podLabels := dep.Spec.Template.Labels
+
+					assert.Equal(t, "spark-operator", podLabels["app.kubernetes.io/name"],
+						"Deployment %s pod template must have app.kubernetes.io/name=spark-operator", name)
+					assert.NotEmpty(t, podLabels["app.kubernetes.io/component"],
+						"Deployment %s pod template must have app.kubernetes.io/component", name)
+				}
+			})
+
+			t.Run("PartOfLabel", func(t *testing.T) {
+				expectedPartOf := map[string]string{
+					"odh":   "opendatahub",
+					"rhoai": "rhoai",
+				}[overlay.name]
+
+				obj := overlayFindResource(resources, "Deployment", "spark-operator-controller")
+				require.NotNil(t, obj)
+				assert.Equal(t, expectedPartOf, obj.GetLabels()["app.kubernetes.io/part-of"],
+					"overlay %s should have app.kubernetes.io/part-of=%s",
+					overlay.name, expectedPartOf)
+			})
 		})
+	}
+}
+
+func whichWebhookKind(name string) string {
+	if strings.HasPrefix(name, "mutating") {
+		return "MutatingWebhookConfiguration"
+	}
+	return "ValidatingWebhookConfiguration"
+}
+
+// TestParamsEnvConsistency validates that all params.env files declare the
+// same set of keys. This catches cases where a new variable is added to one
+// overlay but not the others.
+func TestParamsEnvConsistency(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	envFiles := []struct {
+		name string
+		path string
+	}{
+		{"default", filepath.Join(repoRoot, "config", "default", "params.env")},
+		{"odh", filepath.Join(repoRoot, "config", "overlays", "odh", "params.env")},
+		{"rhoai", filepath.Join(repoRoot, "config", "overlays", "rhoai", "params.env")},
+	}
+
+	keysByFile := make(map[string][]string)
+	for _, ef := range envFiles {
+		data, err := os.ReadFile(ef.path)
+		require.NoError(t, err, "failed to read %s", ef.path)
+
+		var keys []string
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				keys = append(keys, parts[0])
+			}
+		}
+		sort.Strings(keys)
+		keysByFile[ef.name] = keys
+	}
+
+	defaultKeys := keysByFile["default"]
+	for _, ef := range envFiles[1:] {
+		assert.Equal(t, defaultKeys, keysByFile[ef.name],
+			"params.env keys differ between default and %s", ef.name)
+	}
+
+	requiredKeys := []string{
+		"RELATED_IMAGE_ODH_SPARK_OPERATOR_IMAGE",
+		"SPARK_OPERATOR_CONTROLLER_IMAGE",
+		"SPARK_OPERATOR_WEBHOOK_IMAGE",
+	}
+	for _, ef := range envFiles {
+		for _, key := range requiredKeys {
+			assert.Contains(t, keysByFile[ef.name], key,
+				"%s params.env is missing required key %s", ef.name, key)
+		}
 	}
 }

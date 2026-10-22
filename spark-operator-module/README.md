@@ -131,6 +131,15 @@ kubectl get sparkoperator default-sparkoperator
 | `ProvisioningSucceeded` | Manifests rendered and applied successfully           |
 | `Degraded`              | Controller encountered an error during reconciliation |
 
+### Platform version handshake
+
+For managed instances, the controller reads `platformVersion` from the
+`odh-sparkoperator-config` ConfigMap in the applications namespace. After the
+rendered resources and both Spark Operator deployments are healthy, it records
+that value in `status.releases` under `name: platform`. ConfigMap changes trigger
+reconciliation, and failed or incomplete reconciliations retain the previously
+acknowledged platform version.
+
 
 ## Configuration
 

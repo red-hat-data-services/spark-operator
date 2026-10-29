@@ -41,6 +41,7 @@ env:
 
 jobs:
   sync:
+    environment: main
     runs-on: ubuntu-latest
     permissions:
       contents: write

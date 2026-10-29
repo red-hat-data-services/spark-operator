@@ -203,11 +203,22 @@ var _ = Describe("SparkConnect Query", func() {
 			// Connect client dependencies. Install them as a separate step (network
 			// bound) so the query exec gets its own, shorter budget and a hang is
 			// cleanly attributed.
+			//
+			// The install must target a writable directory: the image runs as the
+			// non-root spark user (Dockerfile.odh ends with USER), so pip cannot
+			// write to the root-owned system site-packages
+			// (/opt/app-root/lib/python3.12/...) where the build-time pyspark and
+			// AIPCC base packages live. Installing into /tmp/spark-connect-libs
+			// and prepending it to PYTHONPATH below also guarantees that the
+			// freshly resolved dependency versions take precedence over any
+			// conflicting packages bundled in the image (PYTHONPATH precedes
+			// system site-packages in sys.path).
 			By("Installing the Spark Connect Python client dependencies")
 			pipOutput, err := runCommandWithInputTimeout(WaitTimeout, "",
 				"kubectl", "exec", "-n", conn.Namespace, clientPod.Name, "--",
 				"bash", "-c",
 				"export HOME=/tmp && python3 -m pip install --quiet --no-cache-dir "+
+					"--target /tmp/spark-connect-libs "+
 					"grpcio grpcio-status protobuf pandas pyarrow",
 			)
 			Expect(err).NotTo(HaveOccurred(), "pip install of Spark Connect deps failed: %s", pipOutput)
@@ -250,7 +261,7 @@ except Exception:
 				"kubectl", "exec", "-i", "-n", conn.Namespace, clientPod.Name, "--",
 				"bash", "-c",
 				"export HOME=/tmp && "+
-					"export PYTHONPATH=/opt/spark/python:$(ls /opt/spark/python/lib/py4j-*.zip) && "+
+					"export PYTHONPATH=/tmp/spark-connect-libs:/opt/spark/python:$(ls /opt/spark/python/lib/py4j-*.zip) && "+
 					"python3 -u -",
 			)
 			Expect(err).NotTo(HaveOccurred(), "PySpark Spark Connect query failed: %s", output)

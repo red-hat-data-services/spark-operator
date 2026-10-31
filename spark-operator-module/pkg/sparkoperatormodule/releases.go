@@ -1,13 +1,19 @@
 package sparkoperatormodule
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/opendatahub-io/odh-platform-utilities/api/common"
+
+	platformv1alpha1 "github.com/opendatahub-io/spark-operator-module/pkg/apis/v1alpha1"
 )
 
 type componentMetadata struct {
@@ -55,4 +61,35 @@ func loadComponentReleases(manifestsPath string, componentDirs []string) ([]comm
 	}
 
 	return all, nil
+}
+
+func (r *SparkOperatorModuleReconciler) getPlatformVersion(ctx context.Context) (string, error) {
+	key := types.NamespacedName{
+		Name:      platformConfigMapName,
+		Namespace: r.getApplicationsNamespace(ctx),
+	}
+	config := &corev1.ConfigMap{}
+	if err := r.Get(ctx, key, config); err != nil {
+		return "", fmt.Errorf("reading platform config ConfigMap %s: %w", key, err)
+	}
+
+	version := config.Data[platformVersionKey]
+	if strings.TrimSpace(version) == "" {
+		return "", fmt.Errorf("platform config ConfigMap %s has an empty %q", key, platformVersionKey)
+	}
+	return version, nil
+}
+
+func setPlatformRelease(sparkOperator *platformv1alpha1.SparkOperator, version string) {
+	for i := range sparkOperator.Status.Releases {
+		if sparkOperator.Status.Releases[i].Name == platformReleaseName {
+			sparkOperator.Status.Releases[i].Version = version
+			return
+		}
+	}
+
+	sparkOperator.Status.Releases = append(sparkOperator.Status.Releases, common.ComponentRelease{
+		Name:    platformReleaseName,
+		Version: version,
+	})
 }

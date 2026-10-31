@@ -19,6 +19,8 @@ spec:
     value: '{{source_url}}'
   - name: revision
     value: '{{revision}}'
+  - name: enable-early-gate-testing
+    value: "true"
   pipelineRef:
     resolver: git
     params:

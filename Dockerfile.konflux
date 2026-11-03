@@ -35,6 +35,10 @@ ARG PYSPARK_VERSION=4.0.1
 
 USER 0
 
+# Remove uv from base image (FIPS compliance - RHOAIENG-102414)
+# uv uses bundled aws-lc crypto which is not FIPS-certified
+RUN pip3 uninstall -y uv
+
 # Create spark user/group with SPARK_UID if needed
 RUN if getent group "${SPARK_UID}" > /dev/null 2>&1; then \
         EXISTING_GROUP=$(getent group "${SPARK_UID}" | cut -d: -f1); \

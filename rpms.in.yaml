@@ -9,7 +9,16 @@ contentOrigin:
     - ./ubi.repo
 
 packages:
-  # Java 17 OpenJDK for Spark operator
-  - java-17-openjdk-devel
+  # groupadd/useradd (missing on python-*-minimal)
+  - shadow-utils
+  # spark user shell
+  - bash
+  # Java 21 OpenJDK for Spark operator (UBI 10 has no Java 17)
+  - java-21-openjdk-devel
   # Podman - provides catatonit as the init system for containers
   - podman
+
+context:
+  containerfile:
+    file: "./Dockerfile.konflux"
+    stageName: runtime

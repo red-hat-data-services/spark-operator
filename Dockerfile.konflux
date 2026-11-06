@@ -1,6 +1,7 @@
 # Build args for ODH flow
-ARG GO_BUILDER_IMAGE=registry.access.redhat.com/ubi9/go-toolset@sha256:5e68f09a652ac6627a83c57655e42e24575efb278b54336039c9308607fc6b21
-ARG BASE_IMAGE=quay.io/aipcc/base-images/cpu-el9.8:3.6.0-ea.2-1789393564
+ARG GO_BUILDER_IMAGE=registry.access.redhat.com/ubi10/go-toolset@sha256:fc4a3dfb8f562065cd3e31e2b4544fe1144baef84529adaf3245fac68d7a193d
+# UBI 10 Python minimal — RHEL 10 has PQC crypto by default (no ubi-minimal-pqc / crypto-policies step).
+ARG BASE_IMAGE=registry.access.redhat.com/ubi10/python-312-minimal@sha256:16cd9d766f812e706f4994aaacb656d338b1054952dcd0ce9627c32011d9574e
 
 ################################################################################
 # Stage 1: Build the Go operator binary
@@ -27,13 +28,18 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 ################################################################################
 # Stage 2: Runtime image (ODH-style)
 ################################################################################
-FROM ${BASE_IMAGE}
+FROM ${BASE_IMAGE} AS runtime
 
 ARG SPARK_UID=185
 ARG SPARK_GID=185
 ARG PYSPARK_VERSION=4.0.4
 
 USER 0
+
+# shadow-utils provides groupadd/useradd; bash is the spark user shell.
+# Java 21 (UBI 10 has no Java 17). Podman provides catatonit.
+RUN microdnf install -y shadow-utils bash java-21-openjdk-devel podman && \
+    microdnf clean all && rm -rf /var/cache/dnf/*
 
 # Create spark user/group with SPARK_UID if needed
 RUN if getent group "${SPARK_UID}" > /dev/null 2>&1; then \
@@ -51,17 +57,9 @@ RUN if getent group "${SPARK_UID}" > /dev/null 2>&1; then \
     mkdir -p /home/spark && \
     chown spark:spark /home/spark
 
-# Install Java 17 (prefetched by cachi2)
-RUN dnf install -y java-17-openjdk-devel && \
-    dnf clean all && rm -rf /var/cache/dnf/*
-
-# Install podman (prefetched by cachi2) - provides catatonit
-RUN dnf install -y podman && \
-    dnf clean all && rm -rf /var/cache/dnf/*
-
-ENV JAVA_HOME="/usr/lib/jvm/java-17" \
+ENV JAVA_HOME="/usr/lib/jvm/java-21" \
     JAVA_VENDOR="openjdk" \
-    JAVA_VERSION="17"
+    JAVA_VERSION="21"
 ENV PATH="${JAVA_HOME}/bin:${PATH}:/usr/libexec/podman"
 
 # Verify catatonit is available
@@ -95,13 +93,13 @@ USER ${SPARK_UID}:${SPARK_GID}
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
 
 # Preserve Konflux labels
-LABEL com.redhat.component="odh-spark-operator" \
-      name="managed-open-data-hub/odh-spark-operator-rhel9" \
+LABEL com.redhat.component="odh-spark-operator-rhel10" \
+      name="managed-open-data-hub/odh-spark-operator-rhel10" \
       description="This image contains the Spark Operator controller. It watches for SparkApplication Custom Resources (CRDs) and automates the submission, monitoring, and scaling of Spark driver and executor pods on the cluster." \
-      summary="odh-spark-operator" \
+      summary="odh-spark-operator-rhel10" \
       maintainer="['managed-open-data-hub@redhat.com']" \
       io.openshift.expose-services="" \
       io.k8s.display-name="odh-spark-operator" \
-      io.k8s.description="odh-spark-operator" \
+      io.k8s.description="odh-spark-operator-rhel10" \
       distribution-scope="public" \
       com.redhat.license_terms="https://www.redhat.com/licenses/Red_Hat_Standard_EULA_20191108.pdf"

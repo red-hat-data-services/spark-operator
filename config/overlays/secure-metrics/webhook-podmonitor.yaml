@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: spark-operator-webhook-podmonitor
+  labels:
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/component: webhook
+    app.kubernetes.io/managed-by: kustomize
+    opendatahub.io/monitoring: "true"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: spark-operator
+      app.kubernetes.io/component: webhook
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      scheme: https
+      tlsConfig:
+        ca:
+          configMap:
+            name: spark-operator-metrics-ca-bundle
+            key: service-ca.crt

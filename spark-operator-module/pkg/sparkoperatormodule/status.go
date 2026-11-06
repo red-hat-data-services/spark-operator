@@ -98,15 +98,23 @@ func (r *SparkOperatorModuleReconciler) updateStatus(ctx context.Context,
 }
 
 func (r *SparkOperatorModuleReconciler) setReleaseStatus(sparkOperator *platformv1alpha1.SparkOperator) {
-	if len(sparkOperator.Status.Releases) > 0 {
-		return
-	}
-
 	releases, err := loadComponentReleases(r.ManifestsTemplatePath, []string{SparkOperatorComponentName})
 	if err != nil {
 		ctrl.Log.Error(err, "failed to load component releases")
 		return
 	}
 
-	sparkOperator.SetReleaseStatus(common.ComponentReleaseStatus{Releases: releases})
+	for _, release := range releases {
+		found := false
+		for i := range sparkOperator.Status.Releases {
+			if sparkOperator.Status.Releases[i].Name == release.Name {
+				sparkOperator.Status.Releases[i] = release
+				found = true
+				break
+			}
+		}
+		if !found {
+			sparkOperator.Status.Releases = append(sparkOperator.Status.Releases, release)
+		}
+	}
 }

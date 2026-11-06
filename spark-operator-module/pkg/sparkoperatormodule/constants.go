@@ -2,6 +2,9 @@ package sparkoperatormodule
 
 const (
 	SparkOperatorComponentName = "spark-operator"
+	platformConfigMapName      = "odh-sparkoperator-config"
+	platformVersionKey         = "platformVersion"
+	platformReleaseName        = "platform"
 
 	SparkOperatorManifestSourcePathODH   = "config/overlays/odh"
 	SparkOperatorManifestSourcePathRHOAI = "config/overlays/rhoai"

@@ -79,7 +79,7 @@ func applyControllerConfiguration(resources []unstructured.Unstructured,
 }
 
 func controllerArgumentOverrides(configuration *platformv1alpha1.ControllerConfiguration) ([]controllerArgumentOverride, error) {
-	overrides := make([]controllerArgumentOverride, 0, 6)
+	overrides := make([]controllerArgumentOverride, 0, 7)
 	if configuration.Workers != nil {
 		overrides = append(overrides, controllerArgumentOverride{
 			prefix: "--controller-threads=",
@@ -131,6 +131,21 @@ func controllerArgumentOverrides(configuration *platformv1alpha1.ControllerConfi
 		overrides = append(overrides, controllerArgumentOverride{
 			prefix: "--kube-api-burst=",
 			value:  strconv.FormatInt(int64(*configuration.KubeAPIBurst), 10),
+		})
+	}
+	if len(configuration.MetricsJobStartLatencyBuckets) > 0 {
+		buckets := make([]string, 0, len(configuration.MetricsJobStartLatencyBuckets))
+		previous := int32(0)
+		for _, bucket := range configuration.MetricsJobStartLatencyBuckets {
+			if bucket <= previous {
+				return nil, fmt.Errorf("controller start-latency buckets must be positive and strictly increasing")
+			}
+			buckets = append(buckets, strconv.FormatInt(int64(bucket), 10))
+			previous = bucket
+		}
+		overrides = append(overrides, controllerArgumentOverride{
+			prefix: "--metrics-job-start-latency-buckets=",
+			value:  strings.Join(buckets, ","),
 		})
 	}
 	return overrides, nil

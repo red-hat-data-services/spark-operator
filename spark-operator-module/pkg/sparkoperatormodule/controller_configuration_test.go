@@ -22,6 +22,7 @@ func TestApplyControllerConfiguration_OverridesAllSettings(t *testing.T) {
 	resources := []unstructured.Unstructured{controllerDeploymentUnstructured("512Mi")}
 	workers, workqueueQPS, workqueueBurst := int32(20), int32(100), int32(750)
 	kubeQPS, kubeBurst := int32(50), int32(100)
+	startLatencyBuckets := []int32{30, 60, 120, 300, 400, 500, 600}
 	maxDelay := "30m"
 	maxDelayEnabled := true
 
@@ -35,8 +36,9 @@ func TestApplyControllerConfiguration_OverridesAllSettings(t *testing.T) {
 				Duration: &maxDelay,
 			},
 		},
-		KubeAPIQPS:   &kubeQPS,
-		KubeAPIBurst: &kubeBurst,
+		KubeAPIQPS:                    &kubeQPS,
+		KubeAPIBurst:                  &kubeBurst,
+		MetricsJobStartLatencyBuckets: startLatencyBuckets,
 	}
 
 	g.Expect(applyControllerConfiguration(resources, configuration)).To(Succeed())
@@ -48,8 +50,10 @@ func TestApplyControllerConfiguration_OverridesAllSettings(t *testing.T) {
 		"--workqueue-ratelimiter-max-delay=30m",
 		"--kube-api-qps=50",
 		"--kube-api-burst=100",
+		"--metrics-job-start-latency-buckets=30,60,120,300,400,500,600",
 	))
 	g.Expect(args).NotTo(ContainElement("--controller-threads=10"))
+	g.Expect(args).NotTo(ContainElement("--metrics-job-start-latency-buckets=30,60,90,120,150,180,210,240,270,300"))
 }
 
 func TestApplyControllerConfiguration_OnlyOverridesConfiguredSettings(t *testing.T) {
@@ -64,6 +68,7 @@ func TestApplyControllerConfiguration_OnlyOverridesConfiguredSettings(t *testing
 	g.Expect(args).To(ContainElement("--controller-threads=20"))
 	g.Expect(args).To(ContainElement("--kube-api-qps=20"))
 	g.Expect(args).To(ContainElement("--workqueue-ratelimiter-bucket-qps=50"))
+	g.Expect(args).To(ContainElement("--metrics-job-start-latency-buckets=30,60,90,120,150,180,210,240,270,300"))
 }
 
 func TestApplyControllerConfiguration_RejectsNonPositiveMaxDelay(t *testing.T) {
@@ -104,6 +109,27 @@ func TestApplyControllerConfiguration_DisablesWorkqueueMaxDelay(t *testing.T) {
 	})
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(controllerArgs(resources[0])).NotTo(ContainElement("--workqueue-ratelimiter-max-delay=6h"))
+}
+
+func TestApplyControllerConfiguration_RejectsInvalidStartLatencyBuckets(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		buckets []int32
+	}{
+		{name: "non-positive", buckets: []int32{0, 30}},
+		{name: "duplicate", buckets: []int32{30, 30}},
+		{name: "decreasing", buckets: []int32{60, 30}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			resources := []unstructured.Unstructured{controllerDeploymentUnstructured("512Mi")}
+
+			err := applyControllerConfiguration(resources, &platformv1alpha1.ControllerConfiguration{
+				MetricsJobStartLatencyBuckets: tc.buckets,
+			})
+			g.Expect(err).To(MatchError("controller start-latency buckets must be positive and strictly increasing"))
+		})
+	}
 }
 
 func controllerArgs(dep unstructured.Unstructured) []string {

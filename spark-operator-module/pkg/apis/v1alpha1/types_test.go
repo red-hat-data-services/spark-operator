@@ -152,6 +152,18 @@ func TestResolveControllerConfiguration_UsesConfigured(t *testing.T) {
 	g.Expect(got).To(Equal(configuration))
 }
 
+func TestResolveControllerConfiguration_UsesMetricsJobStartLatencyBuckets(t *testing.T) {
+	g := NewWithT(t)
+	configuration := &ControllerConfiguration{
+		MetricsJobStartLatencyBuckets: []int32{30, 60, 120, 300, 600},
+	}
+
+	got := ResolveControllerConfiguration(&SparkOperator{
+		Spec: SparkOperatorSpec{Spark: &SparkSpec{ControllerConfiguration: configuration}},
+	})
+	g.Expect(got).To(Equal(configuration))
+}
+
 func TestSparkOperatorAccessors(t *testing.T) {
 	g := NewWithT(t)
 

@@ -269,6 +269,7 @@ var _ = Describe("SparkOperatorModule Reconciler", func() {
 	It("applies spark.controllerConfiguration to the controller Deployment", func(ctx SpecContext) {
 		workers, workqueueQPS, workqueueBurst := int32(20), int32(100), int32(500)
 		kubeQPS, kubeBurst := int32(50), int32(100)
+		startLatencyBuckets := []int32{30, 60, 120, 300, 400, 500, 600}
 		maxDelay := "6h"
 		maxDelayEnabled := true
 		cr := fixture.SparkOperatorCR(fixture.WithControllerConfiguration(platformv1alpha1.ControllerConfiguration{
@@ -281,8 +282,9 @@ var _ = Describe("SparkOperatorModule Reconciler", func() {
 					Duration: &maxDelay,
 				},
 			},
-			KubeAPIQPS:   &kubeQPS,
-			KubeAPIBurst: &kubeBurst,
+			KubeAPIQPS:                    &kubeQPS,
+			KubeAPIBurst:                  &kubeBurst,
+			MetricsJobStartLatencyBuckets: startLatencyBuckets,
 		}))
 		Expect(testEnv.Client.Create(ctx, cr)).To(Succeed())
 		DeferCleanup(func(ctx SpecContext) {
@@ -317,6 +319,7 @@ var _ = Describe("SparkOperatorModule Reconciler", func() {
 				"--workqueue-ratelimiter-max-delay=6h",
 				"--kube-api-qps=50",
 				"--kube-api-burst=100",
+				"--metrics-job-start-latency-buckets=30,60,120,300,400,500,600",
 			))
 		}
 		Expect(found).To(BeTrue())

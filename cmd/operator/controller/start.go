@@ -144,6 +144,7 @@ var (
 	healthProbeBindAddress                      string
 	pprofBindAddress                            string
 	secureMetrics                               bool
+	metricsCertDir                              string
 	scheduledSparkApplicationTimestampPrecision string
 	development                                 bool
 	zapOptions                                  = logzap.Options{}
@@ -275,6 +276,7 @@ func NewStartCommand() *cobra.Command {
 
 	command.Flags().StringVar(&healthProbeBindAddress, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	command.Flags().BoolVar(&secureMetrics, "secure-metrics", false, "If set the metrics endpoint is served securely")
+	command.Flags().StringVar(&metricsCertDir, "metrics-cert-dir", "", "Directory containing tls.crt and tls.key for the metrics server. If empty and --secure-metrics is set, a self-signed certificate is generated.")
 
 	command.Flags().StringVar(&pprofBindAddress, "pprof-bind-address", "0", "The address the pprof endpoint binds to. "+
 		"If not set, it will be 0 in order to disable the pprof server")
@@ -327,55 +329,57 @@ func start() {
 	cfg.Burst = kubeAPIBurst
 
 	// Fetch cluster TLS security profile (OpenShift) or use hardened defaults.
-	profileResult := operatortls.FetchTLSProfile(cfg, operatorscheme.ControllerScheme)
-	tlsOptions := profileResult.TLSOpts
-	tlsOptions = append(tlsOptions, func(c *tls.Config) {
-		c.NextProtos = []string{"h2", "http/1.1"}
-	})
-
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme: operatorscheme.ControllerScheme,
-		Cache:  newCacheOptions(),
-		Client: client.Options{
-			Cache: &client.CacheOptions{
-				// TODO: If Ingress reconciliation is added, move these to ByObject with a label selector.
-				// Currently write-only (created with OwnerReferences, no Watches/Owns registered).
-				DisableFor: []client.Object{
-					&networkingv1.Ingress{},
-					&extensionsv1beta1.Ingress{},
+	// Denied reads and invalid profiles fail startup instead of falling back
+	// to a guessed posture.
+	mgr, tlsOptions, profileResult, err := newManagerWithTLSProfile(
+		func() (operatortls.FetchResult, error) {
+			return operatortls.FetchTLSProfile(cfg, operatorscheme.ControllerScheme)
+		},
+		func(tlsOptions []func(*tls.Config)) (ctrl.Manager, error) {
+			mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+				Scheme: operatorscheme.ControllerScheme,
+				Cache:  newCacheOptions(),
+				Client: client.Options{
+					Cache: &client.CacheOptions{
+						// TODO: If Ingress reconciliation is added, move these to ByObject with a label selector.
+						// Currently write-only (created with OwnerReferences, no Watches/Owns registered).
+						DisableFor: []client.Object{
+							&networkingv1.Ingress{},
+							&extensionsv1beta1.Ingress{},
+						},
+					},
 				},
-			},
+				Metrics: newMetricsOptions(metricsBindAddress, secureMetrics, metricsCertDir, tlsOptions),
+				WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
+					TLSOpts: tlsOptions,
+				}),
+				HealthProbeBindAddress:  healthProbeBindAddress,
+				PprofBindAddress:        pprofBindAddress,
+				LeaderElection:          enableLeaderElection,
+				LeaderElectionID:        leaderElectionLockName,
+				LeaderElectionNamespace: leaderElectionLockNamespace,
+				LeaseDuration:           &leaderElectionLeaseDuration,
+				RenewDeadline:           &leaderElectionRenewDeadline,
+				RetryPeriod:             &leaderElectionRetryPeriod,
+				// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
+				// when the Manager ends. This requires the binary to immediately end when the
+				// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
+				// speeds up voluntary leader transitions as the new leader don't have to wait
+				// LeaseDuration time first.
+				//
+				// In the default scaffold provided, the program ends immediately after
+				// the manager stops, so would be fine to enable this option. However,
+				// if you are doing or is intended to do any operation such as perform cleanups
+				// after the manager stops then its usage might be unsafe.
+				// LeaderElectionReleaseOnCancel: true,
+			})
+			if err != nil {
+				logger.Error(err, "failed to create manager")
+			}
+			return mgr, err
 		},
-		Metrics: metricsserver.Options{
-			BindAddress:   metricsBindAddress,
-			SecureServing: secureMetrics,
-			TLSOpts:       tlsOptions,
-		},
-		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
-			TLSOpts: tlsOptions,
-		}),
-		HealthProbeBindAddress:  healthProbeBindAddress,
-		PprofBindAddress:        pprofBindAddress,
-		LeaderElection:          enableLeaderElection,
-		LeaderElectionID:        leaderElectionLockName,
-		LeaderElectionNamespace: leaderElectionLockNamespace,
-		LeaseDuration:           &leaderElectionLeaseDuration,
-		RenewDeadline:           &leaderElectionRenewDeadline,
-		RetryPeriod:             &leaderElectionRetryPeriod,
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
-	})
+	)
 	if err != nil {
-		logger.Error(err, "failed to create manager")
 		os.Exit(1)
 	}
 
@@ -639,4 +643,41 @@ func newSparkSubmitter(ctx context.Context, tlsOpts []func(*tls.Config)) (sparka
 
 	logger.Info("Using REST submitter service", "url", submitterServiceURL)
 	return submitter, nil
+}
+
+// newMetricsOptions builds the metrics server configuration from the provided
+// flags. Extracted as a helper so it can be unit-tested independently.
+func newMetricsOptions(bindAddress string, secure bool, certDir string, tlsOpts []func(*tls.Config)) metricsserver.Options {
+	return metricsserver.Options{
+		BindAddress:   bindAddress,
+		SecureServing: secure,
+		CertDir:       certDir,
+		TLSOpts:       tlsOpts,
+	}
+}
+
+func newTLSOptions(fetchProfile func() (operatortls.FetchResult, error)) ([]func(*tls.Config), operatortls.FetchResult, error) {
+	profileResult, err := fetchProfile()
+	if err != nil {
+		return nil, profileResult, err
+	}
+	tlsOptions := profileResult.TLSOpts
+	tlsOptions = append(tlsOptions, func(c *tls.Config) {
+		c.NextProtos = operatortls.NextProtos(profileResult.MinVersion, profileResult.CipherSuites)
+	})
+	return tlsOptions, profileResult, nil
+}
+
+func newManagerWithTLSProfile(
+	fetchProfile func() (operatortls.FetchResult, error),
+	createManager func([]func(*tls.Config)) (ctrl.Manager, error),
+) (ctrl.Manager, []func(*tls.Config), operatortls.FetchResult, error) {
+	tlsOptions, profileResult, err := newTLSOptions(fetchProfile)
+	if err != nil {
+		logger.Error(err, "failed to resolve cluster TLS profile")
+		return nil, nil, profileResult, err
+	}
+
+	mgr, err := createManager(tlsOptions)
+	return mgr, tlsOptions, profileResult, err
 }

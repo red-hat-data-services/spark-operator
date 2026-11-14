@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spark-operator-monitoring
+  labels:
+    network.openshift.io/policy-group: monitoring
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spark-operator-prometheus
+  namespace: spark-operator-monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: spark-operator-e2e-prometheus
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    verbs:
+      - get
+      - list
+      - watch
+  - nonResourceURLs:
+      - /metrics
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: spark-operator-e2e-prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: spark-operator-e2e-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: spark-operator-prometheus
+    namespace: spark-operator-monitoring
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: spark-operator
+  namespace: spark-operator-monitoring
+spec:
+  podMonitorNamespaceSelector: {}
+  podMonitorSelector:
+    matchLabels:
+      opendatahub.io/monitoring: "true"
+  replicas: 1
+  scrapeInterval: 5s
+  serviceAccountName: spark-operator-prometheus

@@ -82,6 +82,17 @@ func controllerDeploymentUnstructured(memoryLimit string) unstructured.Unstructu
 						"containers": []any{
 							map[string]any{
 								"name": controllerContainerName,
+								"args": []any{
+									"controller",
+									"start",
+									"--controller-threads=10",
+									"--workqueue-ratelimiter-bucket-qps=50",
+									"--workqueue-ratelimiter-bucket-size=500",
+									"--workqueue-ratelimiter-max-delay=6h",
+									"--kube-api-qps=20",
+									"--kube-api-burst=30",
+									"--metrics-job-start-latency-buckets=30,60,90,120,150,180,210,240,270,300",
+								},
 								"resources": map[string]any{
 									"limits": map[string]any{"memory": memoryLimit},
 								},

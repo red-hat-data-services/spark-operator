@@ -8,6 +8,7 @@ on:
       - main
       - "rhoai-*"
     paths:
+      - "go.mod"
       - "spark-operator-module/**"
       - "spark-operator-module-controller.Dockerfile"
       - "Makefile.spark-operator-module.mk"
@@ -17,6 +18,7 @@ on:
       - ".github/workflows/spark-operator-module-ci.yaml"
   pull_request:
     paths:
+      - "go.mod"
       - "spark-operator-module/**"
       - "spark-operator-module-controller.Dockerfile"
       - "Makefile.spark-operator-module.mk"
@@ -55,7 +57,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
         with:
-          go-version-file: spark-operator-module/go.mod
+          go-version-file: go.mod
 
       - name: Install dependencies
         run: cd spark-operator-module && go mod download
@@ -123,6 +125,9 @@ jobs:
             RELATED_IMAGE_ODH_SPARK_OPERATOR_IMAGE=quay.io/opendatahub/spark-operator:local
           kubectl rollout status deployment/spark-operator-module-controller-manager -n opendatahub --timeout=120s
 
+      - name: Create metrics TLS secrets for KIND
+        run: bash hack/create-kind-metrics-tls-secrets.sh opendatahub
+
       - name: Create SparkOperator CR
         run: |
           cat <<'EOF' | kubectl apply -f -
@@ -159,6 +164,14 @@ jobs:
             -n opendatahub --timeout=300s
           echo "Spark operator pods are running:"
           kubectl get pods -n opendatahub
+
+      - name: Verify platform version handshake
+        run: |
+          PLATFORM_VERSION=$(kubectl get configmap odh-sparkoperator-config -n opendatahub \
+            -o jsonpath='{.data.platformVersion}')
+          kubectl wait sparkoperator/default-sparkoperator \
+            --for=jsonpath='{.status.releases[?(@.name=="platform")].version}'="$PLATFORM_VERSION" \
+            --timeout=120s
 
       - name: Run spark-operator E2E tests (preinstalled mode)
         run: |

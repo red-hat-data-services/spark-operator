@@ -10,6 +10,8 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/opendatahub-io/odh-platform-utilities/api/common"
+
 	platformv1alpha1 "github.com/opendatahub-io/spark-operator-module/pkg/apis/v1alpha1"
 )
 
@@ -60,4 +62,13 @@ func TriggerReconcile(ctx context.Context, cli client.Client, cr *platformv1alph
 		cr.Annotations["test/trigger"] = trigger
 		return cli.Update(ctx, cr)
 	})
+}
+
+func FindRelease(cr *platformv1alpha1.SparkOperator, name string) *common.ComponentRelease {
+	for i := range cr.Status.Releases {
+		if cr.Status.Releases[i].Name == name {
+			return &cr.Status.Releases[i]
+		}
+	}
+	return nil
 }

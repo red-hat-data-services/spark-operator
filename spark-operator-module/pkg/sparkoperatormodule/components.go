@@ -37,9 +37,13 @@ func (r *SparkOperatorModuleReconciler) reconcileComponent(ctx context.Context,
 		return nil, fmt.Errorf("applying %s image params: %w", comp.name, err)
 	}
 
-	resources, err := renderKustomize(renderPath, r.getApplicationsNamespace(ctx))
+	namespace := r.getApplicationsNamespace(ctx)
+	resources, err := renderKustomize(renderPath, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("rendering %s kustomize: %w", comp.name, err)
+	}
+	if err := applyMetricsPodMonitorServerNames(resources, namespace); err != nil {
+		return nil, fmt.Errorf("applying metrics PodMonitor server names: %w", err)
 	}
 
 	jobNamespaces := platformv1alpha1.ResolveJobNamespaces(cr)
@@ -52,12 +56,18 @@ func (r *SparkOperatorModuleReconciler) reconcileComponent(ctx context.Context,
 		return nil, fmt.Errorf("applying controller resources: %w", err)
 	}
 
+	controllerConfiguration := platformv1alpha1.ResolveControllerConfiguration(cr)
+	if err := applyControllerConfiguration(resources, controllerConfiguration); err != nil {
+		return nil, fmt.Errorf("applying controller configuration: %w", err)
+	}
+
 	applyManagedByLabel(resources, SparkOperatorComponentName)
 	log.Info("rendered kustomize manifests",
 		"component", comp.name,
 		"resourceCount", len(resources),
 		"jobNamespaces", jobNamespaces,
 		"controllerResourcesSet", controllerResources != nil,
+		"controllerConfigurationSet", controllerConfiguration != nil,
 	)
 
 	return resources, nil

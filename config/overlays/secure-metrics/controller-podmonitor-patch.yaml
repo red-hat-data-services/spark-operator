@@ -1,0 +1,22 @@
+# Convert the existing shared PodMonitor into the controller HTTPS monitor.
+# Preserving its name ensures upgrades update the live object instead of
+# leaving the old TLS-failing monitor behind.
+- op: add
+  path: /metadata/labels/app.kubernetes.io~1component
+  value: controller
+- op: add
+  path: /metadata/labels/opendatahub.io~1monitoring
+  value: "true"
+- op: add
+  path: /spec/selector/matchLabels/app.kubernetes.io~1component
+  value: controller
+- op: replace
+  path: /spec/podMetricsEndpoints/0/scheme
+  value: https
+- op: add
+  path: /spec/podMetricsEndpoints/0/tlsConfig
+  value:
+    ca:
+      configMap:
+        name: spark-operator-metrics-ca-bundle
+        key: service-ca.crt

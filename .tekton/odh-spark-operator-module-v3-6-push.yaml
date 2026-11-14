@@ -10,7 +10,8 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     build.appstudio.openshift.io/build-nudge-files: "build/operator-nudging.yaml"
     pipelinesascode.tekton.dev/on-cel-expression: |
-      event == "push"
+      konflux_cluster == "stone-prod-p02"
+      && event == "push"
       && target_branch == "rhoai-3.6"
       && ( files.all.exists(p, !p.matches('^\\.tekton/')) || ".tekton/odh-spark-operator-module-v3-6-push.yaml".pathChanged() )
   labels:
@@ -65,17 +66,6 @@ spec:
   - name: git-auth
     secret:
       secretName: '{{ git_auth_secret }}'
-  taskRunSpecs:
-  - pipelineTaskName: rpms-signature-scan
-    stepSpecs:
-    - name: rpms-signature-scan
-      computeResources:
-        requests:
-          cpu: "500m"
-          memory: "1Gi"
-        limits:
-          cpu: "500m"
-          memory: "1Gi"
   timeouts:
     pipeline: 2h
   taskRunSpecs:

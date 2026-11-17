@@ -45,9 +45,11 @@ jobs:
           exclude: |
             ^\.codecov\.yml$
             ^\.github/actions/kind-cluster-setup/
-            ^\.github/workflows/(_notify-on-failure|_run-kustomize-e2e|build-quay|codecov|disconnected-readiness|integration-odh|midstream-e2e|operator-chaos|pushImageToDPQuay|semgrep-tls|spark-operator-module-ci|tls-lint|upstream-sync)\.ya?ml$
+            ^\.github/workflows/(_notify-on-failure|_run-kustomize-e2e|build-quay|codecov|disconnected-readiness|integration-odh|midstream-e2e|operator-chaos|post-codefreeze-gatekeeper|pushImageToDPQuay|semgrep-tls|spark-operator-module-ci|tls-lint|upstream-sync)\.ya?ml$
             ^\.tekton/
             ^Dockerfile$
+            ^Dockerfile\.konflux$
+            ^Dockerfile\.konflux\.module-controller$
             ^api/v1beta2/defaults\.go$
             ^api/v1beta2/defaults_test\.go$
             ^api/v1beta2/doc\.go$
@@ -91,6 +93,7 @@ jobs:
             ^pkg/util/doc\.go$
             ^pkg/util/metrics\.go$
             ^pkg/util/util\.go$
+            ^rpms\.(in|lock)\.yaml$
             ^semgrep\.yaml$
             ^spark-operator-module/
             ^spark-docker/Dockerfile$

@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Keep the original PodMonitor name so upgrades update the existing object in
+# place, and add a second monitor for the webhook. The metrics certificates are
+# issued for Service DNS names. Each platform overlay patches its canonical
+# namespace into tlsConfig.serverName; the module corrects it after rendering
+# when APPLICATIONS_NAMESPACE overrides that namespace.
+resources:
+  - webhook-podmonitor.yaml
+
+patches:
+  - path: controller-podmonitor-patch.yaml
+    target:
+      group: monitoring.coreos.com
+      version: v1
+      kind: PodMonitor
+      name: spark-operator-podmonitor

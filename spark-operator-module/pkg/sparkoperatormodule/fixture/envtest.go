@@ -80,6 +80,11 @@ func SetupTestEnv(ctx context.Context) *TestEnv {
 
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "opendatahub"}}
 	gomega.Expect(cli.Create(ctx, ns)).To(gomega.Succeed())
+	platformConfig := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: TestPlatformConfigMapName, Namespace: ns.Name},
+		Data:       map[string]string{TestPlatformVersionKey: TestPlatformVersion},
+	}
+	gomega.Expect(cli.Create(ctx, platformConfig)).To(gomega.Succeed())
 
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	go func() {
@@ -118,8 +123,12 @@ func ProjectRoot() string {
 }
 
 const (
-	TestReleaseName    = "Spark Operator"
-	TestReleaseVersion = "v2.4.0"
+	TestReleaseName           = "Spark Operator"
+	TestReleaseVersion        = "v2.4.0"
+	TestPlatformConfigMapName = "odh-sparkoperator-config"
+	TestPlatformVersionKey    = "platformVersion"
+	TestPlatformVersion       = "2.20.0"
+	TestPlatformReleaseName   = "platform"
 )
 
 func WriteMinimalManifests(workDir string) {

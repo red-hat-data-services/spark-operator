@@ -91,6 +91,7 @@ func controllerDeploymentUnstructured(memoryLimit string) unstructured.Unstructu
 									"--workqueue-ratelimiter-max-delay=6h",
 									"--kube-api-qps=20",
 									"--kube-api-burst=30",
+									"--metrics-job-start-latency-buckets=30,60,90,120,150,180,210,240,270,300",
 								},
 								"resources": map[string]any{
 									"limits": map[string]any{"memory": memoryLimit},

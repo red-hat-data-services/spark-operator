@@ -134,6 +134,7 @@ spec:
           duration: 6h
       kubeAPIQPS: 20
       kubeAPIBurst: 30
+      metricsJobStartLatencyBuckets: [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 400, 500, 600]
 ```
 
 Every `controllerConfiguration` field is optional. When a field is omitted,

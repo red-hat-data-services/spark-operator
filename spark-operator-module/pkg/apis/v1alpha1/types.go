@@ -71,7 +71,7 @@ type SparkSpec struct {
 }
 
 // ControllerConfiguration configures controller concurrency, workqueue rate
-// limiting, and Kubernetes API client throttling.
+// limiting, Kubernetes API client throttling, and metrics.
 type ControllerConfiguration struct {
 	// Workers is the number of concurrent controller reconciliation workers.
 	// +optional
@@ -93,6 +93,13 @@ type ControllerConfiguration struct {
 	// +optional
 	// +kubebuilder:validation:Minimum=1
 	KubeAPIBurst *int32 `json:"kubeAPIBurst,omitempty"`
+
+	// MetricsJobStartLatencyBuckets configures the finite buckets, in seconds,
+	// for the SparkApplication start-latency histogram.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:items:Minimum=1
+	MetricsJobStartLatencyBuckets []int32 `json:"metricsJobStartLatencyBuckets,omitempty"`
 }
 
 // WorkqueueRateLimiterConfiguration configures the token-bucket limiter and
@@ -198,7 +205,8 @@ func ResolveControllerConfiguration(sparkOperator *SparkOperator) *ControllerCon
 			configuration.WorkqueueRateLimiter.BucketSize != nil ||
 			configuration.WorkqueueRateLimiter.MaxDelay != nil)
 	if configuration.Workers == nil && configuration.KubeAPIQPS == nil &&
-		configuration.KubeAPIBurst == nil && !workqueueConfigured {
+		configuration.KubeAPIBurst == nil &&
+		len(configuration.MetricsJobStartLatencyBuckets) == 0 && !workqueueConfigured {
 		return nil
 	}
 	return configuration

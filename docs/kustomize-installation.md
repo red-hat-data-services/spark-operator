@@ -4,6 +4,11 @@ This guide covers deploying and customizing the Spark Operator using its
 [Kustomize](https://kustomize.io/) manifests.  The Kustomize manifests live
 under `config/` and provide a Helm-free, declarative installation path.
 
+> **ODH / RHOAI deployments:** If you are integrating via the
+> opendatahub-operator (spark-operator-module), see the
+> [ODH / RHOAI Integration Contract](odh-integration-contract.md) for the
+> env-var, overlay, and image-injection contract.
+
 ## Architecture Breakdown
 
 `config/default/kustomization.yaml` is the main entry point.  It aggregates
@@ -87,7 +92,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubeflow/spark-operator/refs/
 
 ## Component Guide
 
-Three optional capabilities are shipped as standalone Kustomize directories
+Four optional capabilities are shipped as standalone Kustomize directories
 under `config/`.  Enable them by adding them to the `resources` list in
 your overlay.
 
@@ -128,6 +133,42 @@ annotations (`prometheus.io/scrape`, `prometheus.io/port`,
 `prometheus.io/path`), so basic annotation-based scraping works without this
 resource.  The `PodMonitor` is for clusters using the Prometheus Operator's
 CRD-based service discovery.
+
+### Public ConfigMap (config/public)
+
+Creates the `kubeflow-spark-public` ConfigMap, whose `kubeflow_spark_version`
+key holds the installed Spark Operator version, plus a Role and RoleBinding
+that let every authenticated user read only that ConfigMap.  Clients such as
+the [Kubeflow SDK](https://sdk.kubeflow.org) read it to check which
+control-plane version is installed:
+
+```yaml
+# my-overlay/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../config/default
+  - ../config/public
+```
+
+The resources are created in the `spark-operator` namespace.  To publish them
+in another existing namespace, such as `kube-public`, build `config/public`
+from its own overlay instead:
+
+```yaml
+# my-public-overlay/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: kube-public
+
+resources:
+  - ../config/public
+```
+
+The ConfigMap name is fixed so that clients can find it, so enable it for only
+one Spark Operator installation per namespace.
 
 ### cert-manager Integration (config/certmanager)
 

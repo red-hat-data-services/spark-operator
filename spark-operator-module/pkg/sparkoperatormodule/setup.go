@@ -1,6 +1,8 @@
 package sparkoperatormodule
 
 import (
+	"context"
+
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -8,6 +10,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	platformv1alpha1 "github.com/opendatahub-io/spark-operator-module/pkg/apis/v1alpha1"
 )
@@ -20,6 +25,7 @@ func (r *SparkOperatorModuleReconciler) SetupWithManager(mgr ctrl.Manager) error
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&platformv1alpha1.SparkOperator{}).
 		Owns(&corev1.ConfigMap{}).
+		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(r.platformConfigMapRequests)).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&appsv1.Deployment{}).
@@ -33,4 +39,13 @@ func (r *SparkOperatorModuleReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Owns(&apiextensionsv1.CustomResourceDefinition{}).
 		Named("spark-operator-module").
 		Complete(r)
+}
+
+func (r *SparkOperatorModuleReconciler) platformConfigMapRequests(ctx context.Context, obj client.Object) []reconcile.Request {
+	if obj.GetName() != platformConfigMapName || obj.GetNamespace() != r.getApplicationsNamespace(ctx) {
+		return nil
+	}
+	return []reconcile.Request{{NamespacedName: client.ObjectKey{
+		Name: platformv1alpha1.SparkOperatorInstanceName,
+	}}}
 }
